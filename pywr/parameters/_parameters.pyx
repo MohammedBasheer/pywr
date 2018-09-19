@@ -171,11 +171,11 @@ cdef class ConstantParameter(Parameter):
 ConstantParameter.register()
 
 
-def align_and_resample_dataframe(df, datetime_index):
+def align_and_resample_dataframe(df, period_index):
     from pandas.tseries.offsets import DateOffset, Week, Day
     # Must resample and align the DataFrame to the model.
-    start = datetime_index[0]
-    end = datetime_index[-1]
+    start = period_index[0].start_time
+    end = period_index[-1].start_time
 
     df_index = df.index
     df_freq = df.index.freq
@@ -197,14 +197,14 @@ def align_and_resample_dataframe(df, datetime_index):
         warnings.warn("Model ends before the end of the DataFrame. Some data is not used.", UnutilisedDataWarning)
 
     # Downsampling (i.e. from high freq to lower model freq)
-    if datetime_index.freq >= df_freq:
+    if period_index.freq >= df_freq:
         # Slice to required dates
         df = df[start:end]
         if df.index[0] != start:
             raise ValueError('Start date of DataFrame can not be aligned with the desired index start date.')
         # Take mean at the model's frequency
-        df = df.resample(datetime_index.freq).mean()
-        df.index.freq = datetime_index.freq
+        df = df.resample(period_index.freq).mean()
+        df.index.freq = period_index.freq
     else:
         raise NotImplementedError('Upsampling DataFrame not implemented.')
 

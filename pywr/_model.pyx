@@ -112,8 +112,6 @@ class Model(object):
             key = list(kwargs.keys())[0]
             raise TypeError("'{}' is an invalid keyword argument for this function".format(key))
 
-        self.reset()
-
     @property
     def components(self):
         return NamedIterator(n for n in self.component_graph.nodes() if n != ROOT_NODE)
@@ -611,6 +609,7 @@ class Model(object):
         """Setup the model for the first time or if it has changed since
         last run."""
         logger.info('Setting up model ...')
+        self.timestepper.setup()
         self.scenarios.setup()
         length_changed = self.timestepper.reset()
         for node in self.graph.nodes():

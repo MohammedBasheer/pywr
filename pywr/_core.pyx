@@ -219,14 +219,13 @@ cdef class ScenarioIndex:
 
 cdef class Timestep:
     def __init__(self, datetime, int index, double days):
-        self._datetime = pd.Timestamp(datetime)
+        self._datetime = pd.Period(datetime)
         self._index = index
         self._days = days
-        tt = self.datetime.timetuple()
-        self.dayofyear = tt.tm_yday
-        self.day = tt.tm_mday
-        self.month = tt.tm_mon
-        self.year = tt.tm_year
+        self.dayofyear = self.datetime.start_time.dayofyear
+        self.day = self.datetime.start_time.dayofyear
+        self.month = self.datetime.start_time.month
+        self.year = self.datetime.start_time.year
 
     property datetime:
         """Timestep representation as a `datetime.datetime` object"""
