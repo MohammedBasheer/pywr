@@ -210,7 +210,7 @@ def test_timeseries_excel(simple_linear_model, filename):
 
     @assert_rec(model, ts)
     def expected(timestep, scenario_index):
-        return ts.dataframe.loc[timestep.datetime.start_time]
+        return ts.dataframe.loc[timestep.datetime]
 
     model.run()
 

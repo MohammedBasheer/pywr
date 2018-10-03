@@ -543,7 +543,7 @@ class Model(object):
 
 
         """
-        if self.dirty:
+        if self.dirty or self.timestepper.dirty:
             self.setup()
         self.timestep = next(self.timestepper)
         return self._step()
@@ -566,9 +566,8 @@ class Model(object):
         t0 = time.time()
         timestep = None
         try:
-            if self.dirty:
+            if self.dirty or self.timestepper.dirty:
                 self.setup()
-                self.timestepper.reset()
             else:
                 self.reset()
             t1 = time.time()

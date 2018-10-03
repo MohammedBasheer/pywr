@@ -504,12 +504,13 @@ def test_csv_recorder(simple_linear_model, tmpdir, complib):
     dialect = csv.Sniffer().sniff(data)
     fh.seek(0)
     reader = csv.reader(fh, dialect)
+    periods = model.timestepper.datetime_index
     for irow, row in enumerate(reader):
         if irow == 0:
             expected = expected_header
             actual = row
         else:
-            dt = model.timestepper.start+(irow-1)*model.timestepper.delta
+            dt = periods[irow - 1].to_timestamp()
             expected = [dt.isoformat()]
             actual = [row[0]]
             assert np.all((np.array([float(v) for v in row[1:]]) - 10.0) < 1e-12)
@@ -540,6 +541,9 @@ def test_loading_csv_recorder_from_json(tmpdir):
 
     csvfile = tmpdir.join('output.csv')
     model.run()
+
+    periods = model.timestepper.datetime_index
+
     import csv
     with open(str(csvfile), 'r') as fh:
         dialect = csv.Sniffer().sniff(fh.read(1024))
@@ -550,7 +554,7 @@ def test_loading_csv_recorder_from_json(tmpdir):
                 expected = ['Datetime', 'inpt', 'otpt']
                 actual = row
             else:
-                dt = model.timestepper.start+(irow-1)*model.timestepper.delta
+                dt = periods[irow-1].to_timestamp()
                 expected = [dt.isoformat()]
                 actual = [row[0]]
                 assert np.all((np.array([float(v) for v in row[1:]]) - 10.0) < 1e-12)
@@ -1340,7 +1344,7 @@ class TestEventRecorder:
             td = evt.end.datetime - evt.start.datetime
             assert evt.duration == td.days
 
-        # Test that the volumes in the Storage node during the event periods match
+        #   Test that the volumes in the Storage node during the event periods match
         assert_equal(triggered, arry.data <= 4)
 
         df = evt_rec.to_dataframe()
