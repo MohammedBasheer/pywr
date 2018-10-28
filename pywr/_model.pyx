@@ -294,7 +294,7 @@ class Model(object):
         else:
             start = pandas.to_datetime(timestepper_data['start'])
             end = pandas.to_datetime(timestepper_data['end'])
-            timestep = int(timestepper_data['timestep'])
+            timestep = timestepper_data['timestep']
 
         if model is None:
             model = cls(
