@@ -196,18 +196,12 @@ def align_and_resample_dataframe(df, period_index):
     elif df_index[-1] > end:
         warnings.warn("Model ends before the end of the DataFrame. Some data is not used.", UnutilisedDataWarning)
 
-    # Downsampling (i.e. from high freq to lower model freq)
-    if period_index.freq >= df_freq:
-        # Slice to required dates
-        df = df[start:end]
-        if df.index[0] != start:
-            raise ValueError('Start date of DataFrame can not be aligned with the desired index start date.')
-        # Take mean at the model's frequency
-        df = df.resample(period_index.freq).mean()
-        df.index.freq = period_index.freq
-    else:
-        raise NotImplementedError('Upsampling DataFrame not implemented.')
-
+    df = df.resample(period_index.freq).mean()
+    df.index = df.index.to_period(period_index.freq)
+    # TODO apply forward? filling
+    df = df[period_index[0]:period_index[-1]]
+    assert len(df) == len(period_index)
+    df.index = period_index
     return df
 
 
