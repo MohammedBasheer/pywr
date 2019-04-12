@@ -58,21 +58,6 @@ cdef class Parameter(Component):
     cpdef double[:] get_all_values(self):
         return self.__values
 
-    cpdef update(self, double[:] values):
-        warnings.warn("Use of the `update` method on Parameters has been deprecated."
-                      "Please use either `set_double_variables` or `set_integer_variables` instead.", DeprecationWarning)
-        self.set_double_variables(values)
-
-    cpdef double[:] lower_bounds(self):
-        warnings.warn("Use of the `lower_bounds` method on Parameters has been deprecated."
-                      "Please use either `get_double_lower_bounds` or `get_integer_lower_bounds` instead.", DeprecationWarning)
-        return self.get_double_lower_bounds()
-
-    cpdef double[:] upper_bounds(self):
-        warnings.warn("Use of the `upper_bounds` method on Parameters has been deprecated."
-                      "Please use either `get_double_upper_bounds` or `get_integer_upper_bounds` instead.", DeprecationWarning)
-        return self.get_double_upper_bounds()
-
     cpdef set_double_variables(self, double[:] values):
         raise NotImplementedError()
 
@@ -1145,10 +1130,11 @@ cdef class AggregatedIndexParameter(IndexParameter):
 
     cpdef setup(self):
         super(AggregatedIndexParameter, self).setup()
-        assert(len(self.parameters))
+        assert len(self.parameters)
+        assert all([isinstance(parameter, IndexParameter) for parameter in self.parameters])
 
     cdef calc_values(self, Timestep timestep):
-        cdef Parameter parameter
+        cdef IndexParameter parameter
         cdef int[:] accum = self.__indices  # View of the underlying location for the data
         cdef int[:] values
         cdef int i
@@ -1376,6 +1362,22 @@ cdef class DeficitParameter(Parameter):
 DeficitParameter.register()
 
 
+def get_parameter_from_registry(parameter_type):
+    key = parameter_type.lower()
+    try:
+        return parameter_registry[key]
+    except KeyError:
+        pass
+    if key.endswith("parameter"):
+        key.replace("parameter", "")
+    else:
+        key = key + "parameter"
+    try:
+        return parameter_registry[key]
+    except KeyError:
+        raise TypeError('Unknown parameter type: "{}"'.format(parameter_type))
+
+
 def load_parameter(model, data, parameter_name=None):
     """Load a parameter from a dict"""
     if isinstance(data, basestring):
@@ -1407,18 +1409,7 @@ def load_parameter(model, data, parameter_name=None):
         except:
             pass
 
-        name = parameter_type.lower()
-        try:
-            cls = parameter_registry[name]
-        except KeyError:
-            if name.endswith("parameter"):
-                name = name.replace("parameter", "")
-            else:
-                name += "parameter"
-            try:
-                cls = parameter_registry[name]
-            except KeyError:
-                raise TypeError('Unknown parameter type: "{}"'.format(parameter_type))
+        cls = get_parameter_from_registry(parameter_type)
 
         kwargs = dict([(k,v) for k,v in data.items()])
         del(kwargs["type"])
@@ -1491,7 +1482,7 @@ def load_dataframe(model, data):
         name = table_ref
         df = model.tables[table_ref]
     else:
-        name = data.get('url')
+        name = data.get('url', None)
         df = read_dataframe(model, data)
 
     # if column is not specified, use the whole dataframe
@@ -1526,27 +1517,42 @@ def load_dataframe(model, data):
 def read_dataframe(model, data):
 
     # values reference data in an external file
-    url = data.pop('url')
-    if not os.path.isabs(url) and model.path is not None:
-        url = os.path.join(model.path, url)
+    url = data.pop('url', None)
+    if url is not None:
+        if not os.path.isabs(url) and model.path is not None:
+            url = os.path.join(model.path, url)
+    else:
+        # Must be an embedded dataframe
+        df_data = data.pop('data', None)
 
-    # Check hashes if given before reading the data
-    checksums = data.pop('checksum', {})
-    for algo, hash in checksums.items():
-        check_hash(url, hash, algorithm=algo)
+    if url is None and df_data is None:
+        raise ValueError('No data specified. Provide a "url" or "data" key.')
 
-    try:
-        filetype = data.pop('filetype')
-    except KeyError:
-        # guess file type based on extension
-        if url.endswith(('.xls', '.xlsx')):
-            filetype = "excel"
-        elif url.endswith(('.csv', '.gz')):
-            filetype = "csv"
-        elif url.endswith(('.hdf', '.hdf5', '.h5')):
-            filetype = "hdf"
-        else:
-            raise NotImplementedError('Unknown file extension: "{}"'.format(url))
+    if url is not None:
+        # Check hashes if given before reading the data
+        checksums = data.pop('checksum', {})
+        for algo, hash in checksums.items():
+            check_hash(url, hash, algorithm=algo)
+        
+        try:
+            filetype = data.pop('filetype')
+        except KeyError:
+            # guess file type based on extension
+            if url.endswith(('.xls', '.xlsx')):
+                filetype = "excel"
+            elif url.endswith(('.csv', '.gz')):
+                filetype = "csv"
+            elif url.endswith(('.hdf', '.hdf5', '.h5')):
+                filetype = "hdf"
+            else:
+                raise NotImplementedError('Unknown file extension: "{}"'.format(url))
+    else:
+        if 'filetype' in data:
+            raise ValueError('"filetype" is only valid when loading data from a URL.')
+        if 'checksum' in data:
+            raise ValueError('"checksum" is only valid when loading data from a URL.')
+        
+        filetype = "dict"
 
     if filetype == "csv":
         if hasattr(data, "index_col"):
@@ -1559,6 +1565,11 @@ def read_dataframe(model, data):
     elif filetype == "hdf":
         key = data.pop("key", None)
         df = pandas.read_hdf(url, key=key, **data)
+    elif filetype == "dict":
+        parse_dates = data.pop('parse_dates', False)
+        df = pandas.DataFrame.from_dict(df_data, **data)
+        if parse_dates:
+            df.index = pandas.DatetimeIndex(df.index)
 
     if df.index.dtype.name == "object" and data.get("parse_dates", False):
         # catch dates that haven't been parsed yet

@@ -2,11 +2,37 @@
 
 All issue numbers are relative to https://github.com/pywr/pywr/issues unless otherwise stated.
 
-## Master
+## v1.1.0
 
 ### New features
 
-- Added `HydropowerTargetParameter` to specify a flow target from a hydropower target (#631)
+- New "edge based" GLPK solver. (#672)
+- Improved `FlowDurationDeviationRecorder` with JSON support and bug fixes when no scenario is given. (#677)
+
+### Bug fixes
+
+- Replace deprecated calls time time.clock with time.perf_counter. (#683)
+- Type optimisation in AggregatedIndexParameter. (#662)
+
+### Documentation 
+
+- Updated documentation: control curves, extending Pywr. (#652)
+
+### Miscellaneous
+
+- Variable renames and clean up for GLPK path solver. (#672)
+- Spport for Python 3.7. (#662)
+- Updated url in setup.py metadata to GitHub project (#661)
+- Additional cython compiler directives (#645)
+
+## v1.0.0
+
+### New features
+
+- Added ratchet support to threshold parameters. (#655)
+- Added `ConstantScenarioIndexParameter`. (#654)
+- Added support for Platypus and Pygmo optimisation wrappers. Involved a refactor of the existing optimisation support. (#610)
+- Added `HydropowerTargetParameter` to specify a flow target from a hydropower target. (#631)
 - Renamed `HydroPowerRecorder` to `HydropowerRecorder` (#631)
 - Better warning/error messages in `TablesArrayParameter` (#629)
 - Allow solver to be defined by the environment variable `PYWR_SOLVER`. (#619)
@@ -16,14 +42,19 @@ All issue numbers are relative to https://github.com/pywr/pywr/issues unless oth
 
 ### Bug fixes
 
+- Fix bug setting the area property of `Storage` nodes. (#657)
+- Fixed bug with finally clause in the optimisation wrapper. (#649)
 - Fix a bug in `AnnualHarmonicSeriesParameter` related to updating the `amplitudes` and `phases` values with `set_double_variables` (#622)
 
 ### Miscellaneous
 
+- Refactored several recorders and unified the use of temporal aggregation. This deprecated several keyword arguments in some existing Recorders. See the PR for details. (#635)
+- Removed deprecated (Monthly|Daily)ProfileControlCurve. (#640)
 - Dropped support for Python 2 and <3.6. Pywr is no longer tested against Python versions earlier than 3.6. (#623)
 - Use new `networkx.nodes_with_selfloops` function. (#628)
 - `AbstractProfileControlCurveParameter`, `MonthlyProfileControlCurveParameter` and `DailyProfileControlCurveParameter` have been removed after deprecation. (#231, #640)
 - Improved documentation. (#616, #627)
+
 
 ## v0.5.1
 
