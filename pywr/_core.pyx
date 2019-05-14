@@ -221,9 +221,12 @@ cdef class Timestep:
     def __init__(self, period, int index):
         self.period = period
         self.index = index
-        days = (period.end_time - period.start_time).days
-        if days < 1:
-            raise ValueError('Timestep only supports periods with a duration of at least 1 day.')
+        delta = period.end_time - period.start_time
+        # if days < 1:
+        #     raise ValueError('Timestep only supports periods with a duration of at least 1 day.')
+
+        days = delta.days + delta.seconds / (3600 * 24)
+
         self.days = days
         self.dayofyear = self.datetime.dayofyear
         self.day = self.datetime.dayofyear

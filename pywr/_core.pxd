@@ -26,7 +26,7 @@ cdef class ScenarioIndex:
 cdef class Timestep:
     cdef readonly object period
     cdef readonly int index
-    cdef readonly int days
+    cdef readonly double days
     cdef readonly int dayofyear
     cdef readonly int day
     cdef readonly int month
