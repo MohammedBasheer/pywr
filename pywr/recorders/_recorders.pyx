@@ -23,6 +23,7 @@ _agg_func_lookup = {
     "product": AggFuncs.PRODUCT,
     "custom": AggFuncs.CUSTOM,
 }
+_agg_func_lookup_reverse = {v: k for k, v in _agg_func_lookup.items()}
 
 cdef enum ObjDirection:
     NONE = 0
@@ -43,6 +44,10 @@ cdef class Aggregator:
         self.func = func
 
     property func:
+        def __get__(self):
+            if self._func == AggFuncs.CUSTOM:
+                return self._user_func
+            return _agg_func_lookup_reverse[self._func]
         def __set__(self, func):
             self._user_func = None
             if isinstance(func, basestring):
@@ -142,6 +147,8 @@ cdef class Recorder(Component):
         self._scenario_aggregator = Aggregator(agg_func)
 
     property agg_func:
+        def __get__(self):
+            return self._scenario_aggregator.func
         def __set__(self, agg_func):
             self._scenario_aggregator.func = agg_func
 
@@ -282,10 +289,10 @@ cdef class AggregatedRecorder(Recorder):
 
     @classmethod
     def load(cls, model, data):
-        recorder_names = data["recorders"]
-        recorders = [model.recorders[name] for name in recorder_names]
-        del(data["recorders"])
+        recorder_names = data.pop("recorders")
+        recorders = [load_recorder(model, name) for name in recorder_names]
         rec = cls(model, recorders, **data)
+        return rec
 
 AggregatedRecorder.register()
 
@@ -1409,13 +1416,11 @@ cdef class AnnualCountIndexParameterRecorder(IndexParameterRecorder):
 AnnualCountIndexParameterRecorder.register()
 
 
-def load_recorder(model, data):
+def load_recorder(model, data, recorder_name=None):
     recorder = None
 
     if isinstance(data, basestring):
         recorder_name = data
-    else:
-        recorder_name = None
 
     # check if recorder has already been loaded
     for rec in model.recorders:
@@ -1429,7 +1434,7 @@ def load_recorder(model, data):
             # we're still in the process of loading data from JSON and
             # the parameter requested hasn't been loaded yet - do it now
             try:
-                data = model._recorders_to_load[recorder_name]
+                data = model._recorders_to_load.pop(recorder_name)
             except KeyError:
                 raise KeyError("Unknown recorder: '{}'".format(data))
             recorder = load_recorder(model, data)

@@ -372,6 +372,18 @@ def test_parameter_recorder_json():
     assert_allclose(rec_demand.data, 10)
     assert_allclose(rec_supply.data, 15)
 
+
+def test_nested_recorder_json():
+    model = load_model("agg_recorder_nesting.json")
+    rec_demand = model.recorders["demand_max_recorder"]
+    rec_supply = model.recorders["supply_max_recorder"]
+    rec_total = model.recorders["max_recorder"]
+    model.run()
+    assert_allclose(rec_demand.aggregated_value(), 10)
+    assert_allclose(rec_supply.aggregated_value(), 15)
+    assert_allclose(rec_total.aggregated_value(), 25)
+
+
 @pytest.fixture()
 def daily_profile_model(simple_linear_model):
     model = simple_linear_model
@@ -1158,6 +1170,10 @@ def test_mean_flow_node_recorder(simple_linear_model):
     assert_allclose(10.0, rec.aggregated_value(), atol=1e-7)
 
 
+def custom_test_func(array, axis=None):
+    return np.sum(array**2, axis=axis)
+
+
 class TestAggregatedRecorder:
     """Tests for AggregatedRecorder"""
     funcs = {"min": np.min, "max": np.max, "mean": np.mean, "sum": np.sum}
@@ -1184,6 +1200,17 @@ class TestAggregatedRecorder:
 
         model.step()
         assert_allclose(func([20.0, 40.0]), rec.aggregated_value(), atol=1e-7)
+
+    @pytest.mark.parametrize("agg_func", ["min", "max", "mean", "sum", "custom"])
+    def test_agg_func_get_set(self, simple_linear_model, agg_func):
+        """Test getter and setter for AggregatedRecorder.agg_func"""
+        if agg_func == "custom":
+            agg_func = custom_test_func
+        model = simple_linear_model
+        rec = AggregatedRecorder(model, [], agg_func=agg_func)
+        assert rec.agg_func == agg_func
+        rec.agg_func = "product"
+        assert rec.agg_func == "product"
 
 
 def test_reset_timestepper_recorder():
