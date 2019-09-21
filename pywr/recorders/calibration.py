@@ -88,7 +88,9 @@ class CoefficientOfDeterminationNodeRecorder(AbstractComparisonNodeRecorder):
         mod = self.data        
         obs = self._aligned_observed
         n_items = len(mod)    
-        return ((n_items*np.sum(mod*obs, axis=0)-np.sum(mod, axis=0)*np.sum(obs, axis=0))/(np.sqrt((n_items*np.sum(mod**2, axis=0)-(np.sum(mod, axis=0))**2)*(n_items*np.sum(obs**2, axis=0)-(np.sum(obs, axis=0))**2))))**2
+        Numerator=n_items*np.sum(mod*obs, axis=0)-np.sum(mod, axis=0)*np.sum(obs, axis=0)
+        Denominator=np.sqrt((n_items*np.sum(mod**2, axis=0)-(np.sum(mod, axis=0))**2)*(n_items*np.sum(obs**2, axis=0)-(np.sum(obs, axis=0))**2))    
+        return (Numerator/Denominator)**2
 
 
 class AbstractComparisonStorageRecorder(NumpyArrayStorageRecorder):
@@ -161,5 +163,7 @@ class CoefficientOfDeterminationStorageRecorder(AbstractComparisonStorageRecorde
     def values(self):
         mod = self.data        
         obs = self._aligned_observed
-        n_items = len(mod)    
-        return ((n_items*np.sum(mod*obs, axis=0)-np.sum(mod, axis=0)*np.sum(obs, axis=0))/(np.sqrt((n_items*np.sum(mod**2, axis=0)-(np.sum(mod, axis=0))**2)*(n_items*np.sum(obs**2, axis=0)-(np.sum(obs, axis=0))**2))))**2
+        n_items = len(mod)
+        Numerator=n_items*np.sum(mod*obs, axis=0)-np.sum(mod, axis=0)*np.sum(obs, axis=0)
+        Denominator=np.sqrt((n_items*np.sum(mod**2, axis=0)-(np.sum(mod, axis=0))**2)*(n_items*np.sum(obs**2, axis=0)-(np.sum(obs, axis=0))**2))    
+        return (Numerator/Denominator)**2
