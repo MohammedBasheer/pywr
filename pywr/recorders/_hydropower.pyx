@@ -263,7 +263,7 @@ cdef class HydropowerRecorderWithVaribaleTailwater(NumpyArrayNodeRecorder):
                                              flow_unit_conversion=self.flow_unit_conversion,
                                              energy_unit_conversion=self.energy_unit_conversion)
 
-            self._data[ts._index, scenario_index.global_id] = power
+            self._data[ts.index, scenario_index.global_id] = power
 
     @classmethod
     def load(cls, model, data):
