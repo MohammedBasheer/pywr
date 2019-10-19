@@ -1,6 +1,5 @@
 import numpy as np
 cimport numpy as np
-from scipy.stats import percentileofscore
 import pandas as pd
 import datetime
 import warnings
@@ -16,8 +15,6 @@ cdef enum AggFuncs:
     MEDIAN = 4
     PRODUCT = 5
     CUSTOM = 6
-    PERCENTILE = 7
-    PERCENTILEOFSCORE = 8
 _agg_func_lookup = {
     "sum": AggFuncs.SUM,
     "min": AggFuncs.MIN,
@@ -26,8 +23,6 @@ _agg_func_lookup = {
     "median": AggFuncs.MEDIAN,
     "product": AggFuncs.PRODUCT,
     "custom": AggFuncs.CUSTOM,
-    "percentile": AggFuncs.PERCENTILE,
-    "percentileofscore": AggFuncs.PERCENTILEOFSCORE,
 }
 _agg_func_lookup_reverse = {v: k for k, v in _agg_func_lookup.items()}
 
@@ -56,22 +51,14 @@ cdef class Aggregator:
             return _agg_func_lookup_reverse[self._func]
         def __set__(self, func):
             self._user_func = None
-            func_args = []
-            func_kwargs = {}
             if isinstance(func, basestring):
-                func_type = _agg_func_lookup[func.lower()]
-            elif isinstance(func, dict):
-                func_type = _agg_func_lookup[func['func']]
-                func_args = func.get('args', [])
-                func_kwargs = func.get('kwargs', {})
+                func = _agg_func_lookup[func.lower()]
             elif callable(func):
                 self._user_func = func
-                func_type = AggFuncs.CUSTOM
+                func = AggFuncs.CUSTOM
             else:
                 raise ValueError("Unrecognised aggregation function: \"{}\".".format(func))
-            self._func = func_type
-            self.func_args = func_args
-            self.func_kwargs = func_kwargs
+            self._func = func
 
     cpdef double aggregate_1d(self, double[:] data, ignore_nan=False) except *:
         """Compute an aggregated value across 1D array.
@@ -95,10 +82,6 @@ cdef class Aggregator:
             return np.median(values)
         elif self._func == AggFuncs.CUSTOM:
             return self._user_func(np.array(values))
-        elif self._func == AggFuncs.PERCENTILE:
-            return np.percentile(values, *self.func_args, **self.func_kwargs)
-        elif self._func == AggFuncs.PERCENTILEOFSCORE:
-            return percentileofscore(values, *self.func_args, **self.func_kwargs)
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -106,7 +89,6 @@ cdef class Aggregator:
         """Compute an aggregated value along an axis of a 2D array.
         """
         cdef double[:, :] values = data
-        cdef Py_ssize_t i
 
         if ignore_nan:
             values = np.array(values)[~np.isnan(values)]
@@ -125,22 +107,6 @@ cdef class Aggregator:
             return np.median(values, axis=axis)
         elif self._func == AggFuncs.CUSTOM:
             return self._user_func(np.array(values), axis=axis)
-        elif self._func == AggFuncs.PERCENTILE:
-            return np.percentile(values, *self.func_args, axis=axis, **self.func_kwargs)
-        elif self._func == AggFuncs.PERCENTILEOFSCORE:
-            # percentileofscore doesn't support the axis argument
-            # we must therefore iterate over the array
-            if axis == 0:
-                out = np.empty(data.shape[1])
-                for i in range(data.shape[1]):
-                    out[i] = percentileofscore(values[:, i], *self.func_args, **self.func_kwargs)
-            elif axis == 1:
-                out = np.empty(data.shape[0])
-                for i in range(data.shape[0]):
-                    out[i] = percentileofscore(values[i, :], *self.func_args, **self.func_kwargs)
-            else:
-                raise ValueError('Axis "{}" not recognised for percentileofscore function.'.format(axis))
-            return out
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -818,24 +784,10 @@ cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
-<<<<<<< HEAD
-            if self._max_flow[i, j] <= 0.0000000000001:
-                self._data[i, j] = 1
-            if self._max_flow[i, j] > 0.0000000000001:
-                self._data[i, j] = self._actual_flow[i, j] / self._max_flow[i, j]
-=======
-<<<<<<< HEAD
-            if self._max_flow[i, j] <= 0.0000000000001:
-                1
-            if self._max_flow[i, j] > 0.0000000000001:
-                self._data[i, j] = self._actual_flow[i, j] / self._max_flow[i, j]
-=======
             try:
                 self._data[i, j] = self._actual_flow[i, j] / self._max_flow[i, j]
             except ZeroDivisionError:
                 self._data[i, j] = 1.0
->>>>>>> b7a0af282d6ec2b26c05bfdfdf74a0199b98d871
->>>>>>> annual_deficit_recorders
         return 0
 AnnualSuppliedRatioRecorder.register()
 
@@ -867,24 +819,10 @@ cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
-<<<<<<< HEAD
-            if self._max_flow[i, j] <= 0.0000000000001:
-                self._data[i, j] = 0
-            if self._max_flow[i, j] > 0.0000000000001:
-                self._data[i, j] = 1 - self._actual_flow[i, j] / self._max_flow[i, j]
-=======
-<<<<<<< HEAD
-            if self._max_flow[i, j] <= 0.0000000000001:
-                1
-            if self._max_flow[i, j] > 0.0000000000001:
-                self._data[i, j] = 1 - self._actual_flow[i, j] / self._max_flow[i, j]
-=======
             try:
                 self._data[i, j] = 1 - self._actual_flow[i, j] / self._max_flow[i, j]
             except ZeroDivisionError:
                 self._data[i, j] = 0.0
->>>>>>> b7a0af282d6ec2b26c05bfdfdf74a0199b98d871
->>>>>>> annual_deficit_recorders
         return 0
 AnnualCurtailmentRatioRecorder.register()
 
