@@ -779,7 +779,7 @@ cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
             if self._max_flow[i, j] <= 0.0000000000001:
-                1
+                self._data[i, j] = 1
             if self._max_flow[i, j] > 0.0000000000001:
                 self._data[i, j] = self._actual_flow[i, j] / self._max_flow[i, j]
         return 0
@@ -814,7 +814,7 @@ cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
             if self._max_flow[i, j] <= 0.0000000000001:
-                1
+                self._data[i, j] = 0
             if self._max_flow[i, j] > 0.0000000000001:
                 self._data[i, j] = 1 - self._actual_flow[i, j] / self._max_flow[i, j]
         return 0
