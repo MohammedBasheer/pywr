@@ -3,7 +3,7 @@ cimport numpy as np
 import pandas as pd
 import datetime
 import warnings
-from past.builtins import basestring
+
 
 recorder_registry = {}
 
@@ -51,8 +51,14 @@ cdef class Aggregator:
             return _agg_func_lookup_reverse[self._func]
         def __set__(self, func):
             self._user_func = None
-            if isinstance(func, basestring):
-                func = _agg_func_lookup[func.lower()]
+            func_args = []
+            func_kwargs = {}
+            if isinstance(func, str):
+                func_type = _agg_func_lookup[func.lower()]
+            elif isinstance(func, dict):
+                func_type = _agg_func_lookup[func['func']]
+                func_args = func.get('args', [])
+                func_kwargs = func.get('kwargs', {})
             elif callable(func):
                 self._user_func = func
                 func = AggFuncs.CUSTOM
@@ -226,7 +232,7 @@ cdef class AggregatedRecorder(Recorder):
         # Optional different method for aggregating across self.recorders scenarios
         agg_func = kwargs.pop('recorder_agg_func', kwargs.get('agg_func'))
 
-        if isinstance(agg_func, basestring):
+        if isinstance(agg_func, str):
             agg_func = _agg_func_lookup[agg_func.lower()]
         elif callable(agg_func):
             self.recorder_agg_func = agg_func
@@ -1766,7 +1772,7 @@ AnnualCountIndexParameterRecorder.register()
 def load_recorder(model, data, recorder_name=None):
     recorder = None
 
-    if isinstance(data, basestring):
+    if isinstance(data, str):
         recorder_name = data
 
     # check if recorder has already been loaded
@@ -1775,7 +1781,7 @@ def load_recorder(model, data, recorder_name=None):
             recorder = rec
             break
 
-    if recorder is None and isinstance(data, basestring):
+    if recorder is None and isinstance(data, str):
         # recorder was requested by name, but hasn't been loaded yet
         if hasattr(model, "_recorders_to_load"):
             # we're still in the process of loading data from JSON and
