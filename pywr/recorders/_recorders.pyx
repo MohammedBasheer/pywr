@@ -51,14 +51,8 @@ cdef class Aggregator:
             return _agg_func_lookup_reverse[self._func]
         def __set__(self, func):
             self._user_func = None
-            func_args = []
-            func_kwargs = {}
-            if isinstance(func, str):
-                func_type = _agg_func_lookup[func.lower()]
-            elif isinstance(func, dict):
-                func_type = _agg_func_lookup[func['func']]
-                func_args = func.get('args', [])
-                func_kwargs = func.get('kwargs', {})
+            if isinstance(func, basestring):
+                func = _agg_func_lookup[func.lower()]
             elif callable(func):
                 self._user_func = func
                 func = AggFuncs.CUSTOM
