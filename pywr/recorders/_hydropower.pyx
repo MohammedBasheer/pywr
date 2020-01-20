@@ -546,7 +546,7 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
         #self.water_elevation_parameter = water_elevation_parameter
         self.water_elevation_parameter = list(water_elevation_parameter)
-        self.turbine_elevation = turbine_elevation
+        self.turbine_elevation = list(turbine_elevation)
         self.efficiency = efficiency
         self.density = density
         self.flow_unit_conversion = flow_unit_conversion
@@ -631,7 +631,7 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
             for node_index in nodes_length:
                 head = self.water_elevation_parameter[node_index].get_value(scenario_index)
-                head -= self.turbine_elevation
+                head -= self.turbine_elevation[node_index]
                 head = max(head, 0.0)
                 # Get the flow from the current node
                 q = self.nodes[node_index].flow[scenario_index.global_id]
@@ -643,16 +643,13 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
                 self._annual_energy[i, j] += energy_temp
 
-                print("water level paramater name xxxxxxxxxxxxxxx")
-                print(self.water_elevation_parameter[node_index].name)
-                print("head value xxxxxxxxxxxxxxxxxxxx")
-                print(head)
-
         self._data[i, j] = self._annual_energy[i, j]   
+        
         return 0
 
     @classmethod
     def load(cls, model, data):
+        turbine_elevation = data.pop("turbine_elevation")
         from pywr.parameters import load_parameter
         nodes = [model._get_node_from_ref(model, node_name) for node_name in data.pop('nodes')]
         if "water_elevation_parameter" in data:
@@ -660,6 +657,6 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         else:
             water_elevation_parameter = None
 
-        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter, **data)
+        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter,turbine_elevation=turbine_elevation, **data)
 
 AnnualHydroEnergyRecorder.register()
