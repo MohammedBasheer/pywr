@@ -91,6 +91,7 @@ Interpolation parameters
     InterpolatedParameter
     InterpolatedVolumeParameter
     InterpolatedQuadratureParameter
+    InterpolatedFlowParameter
 
 
 Control curve parameters
@@ -121,5 +122,6 @@ Other parameters
    AnnualHarmonicSeriesParameter
    DeficitParameter
    ScenarioWrapperParameter
+   PiecewiseIntegralParameter
 
 

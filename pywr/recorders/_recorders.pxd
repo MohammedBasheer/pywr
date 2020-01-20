@@ -5,6 +5,8 @@ from pywr.parameters._parameters cimport Parameter, IndexParameter
 
 cdef class Aggregator:
     cdef object _user_func
+    cdef public list func_args
+    cdef public dict func_kwargs
     cdef int _func
     cpdef double aggregate_1d(self, double[:] data, ignore_nan=*) except *
     cpdef double[:] aggregate_2d(self, double[:, :] data, axis=*, ignore_nan=*) except *
@@ -46,6 +48,25 @@ cdef class NumpyArrayNodeSuppliedRatioRecorder(NumpyArrayNodeRecorder):
     pass
 
 cdef class NumpyArrayNodeCurtailmentRatioRecorder(NumpyArrayNodeRecorder):
+    pass
+
+cdef class AbstractAnnualRecorder(Recorder):
+    cdef public list nodes
+    cdef double[:, :] _data
+    cdef double[:, :] _max_flow
+    cdef double[:, :] _actual_flow
+    cdef public int reset_day
+    cdef public int reset_month
+    cdef int _current_year_index
+    cdef int _last_reset_year
+
+cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
+    pass
+
+cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
+    pass
+
+cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
     pass
 
 cdef class NumpyArrayAbstractStorageRecorder(StorageRecorder):
