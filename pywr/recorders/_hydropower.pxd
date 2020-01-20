@@ -23,7 +23,7 @@ cdef class TotalHydroEnergyRecorder(BaseConstantNodeRecorder):
 
 cdef class AnnualHydroEnergyRecorder(Recorder):
     cdef public list nodes
-    cdef Parameter _water_elevation_parameter
+    cdef public list water_elevation_parameter
     cdef public double turbine_elevation
     cdef public double flow_unit_conversion
     cdef public double energy_unit_conversion

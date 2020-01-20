@@ -544,7 +544,8 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         super().__init__(model, **kwargs)
         self.nodes = [n for n in nodes]
 
-        self.water_elevation_parameter = water_elevation_parameter
+        #self.water_elevation_parameter = water_elevation_parameter
+        self.water_elevation_parameter = list(water_elevation_parameter)
         self.turbine_elevation = turbine_elevation
         self.efficiency = efficiency
         self.density = density
@@ -558,14 +559,17 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         self.reset_day = reset_day
         self.reset_month = reset_month
 
-    property water_elevation_parameter:
-        def __get__(self):
-            return self._water_elevation_parameter
-        def __set__(self, parameter):
-            if self._water_elevation_parameter:
-                self.children.remove(self._water_elevation_parameter)
-            self.children.add(parameter)
-            self._water_elevation_parameter = parameter
+        for p in self.water_elevation_parameter:
+            p.parents.add(self)
+
+#    property water_elevation_parameter:
+#        def __get__(self):
+#            return self._water_elevation_parameter
+#        def __set__(self, parameter):
+#            if self._water_elevation_parameter:
+#                self.children.remove(self._water_elevation_parameter)
+#            self.children.add(parameter)
+#            self._water_elevation_parameter = parameter
 
     cpdef setup(self):
         cdef int ncomb = len(self.model.scenarios.combinations)
@@ -626,17 +630,8 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
             j = scenario_index.global_id
 
             for node_index in nodes_length:
-
-                if self._water_elevation_parameter is not None:
-                    head = self._water_elevation_parameter.get_value(scenario_index)
-                    if self.turbine_elevation is not None:
-                        head -= self.turbine_elevation
-                elif self.turbine_elevation is not None:
-                    head = self.turbine_elevation
-                else:
-                    raise ValueError('One or both of storage_node or level must be set.')
-
-                # -ve head is not valid
+                head = self.water_elevation_parameter[node_index].get_value(scenario_index)
+                head -= self.turbine_elevation
                 head = max(head, 0.0)
                 # Get the flow from the current node
                 q = self.nodes[node_index].flow[scenario_index.global_id]
@@ -647,6 +642,12 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
                 energy_temp = power * days * 24
 
                 self._annual_energy[i, j] += energy_temp
+
+                print("water level paramater name xxxxxxxxxxxxxxx")
+                print(self.water_elevation_parameter[node_index].name)
+                print("head value xxxxxxxxxxxxxxxxxxxx")
+                print(head)
+
         self._data[i, j] = self._annual_energy[i, j]   
         return 0
 
@@ -655,9 +656,10 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         from pywr.parameters import load_parameter
         nodes = [model._get_node_from_ref(model, node_name) for node_name in data.pop('nodes')]
         if "water_elevation_parameter" in data:
-             water_elevation_parameter = load_parameter(model, data.pop("water_elevation_parameter"))
+            water_elevation_parameter = [load_parameter(model, p) for p in data.pop("water_elevation_parameter")]
         else:
             water_elevation_parameter = None
 
-        return cls(model, nodes, water_elevation_parameter, **data)
+        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter, **data)
+
 AnnualHydroEnergyRecorder.register()
