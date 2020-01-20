@@ -60,3 +60,6 @@ target/
 
 # vscode
 .vscode/
+
+build.txt
+build.bat
