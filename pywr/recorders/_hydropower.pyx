@@ -516,7 +516,7 @@ cdef class TotalHydroEnergyRecorderWithVaribaleTailwater(BaseConstantNodeRecorde
 TotalHydroEnergyRecorderWithVaribaleTailwater.register()
 
 
-cdef class AnnualHydroEnergyRecorder(BaseConstantNodeRecorder):
+cdef class AnnualHydroEnergyRecorder(Recorder):
     """Abstract class for recording cumulative annual differences between actual flow and max_flow.
 
     This abstract class can be subclassed to calculate statistics of differences between cumulative
@@ -539,9 +539,10 @@ cdef class AnnualHydroEnergyRecorder(BaseConstantNodeRecorder):
     the first period of the model will be less than one year in length.
     """
 
-    def __init__(self, model, node, water_elevation_parameter=None, turbine_elevation=0.0, efficiency=1.0, density=1000,
+    def __init__(self, model, nodes, water_elevation_parameter=None, turbine_elevation=0.0, efficiency=1.0, density=1000,
                  flow_unit_conversion=1.0, energy_unit_conversion=1e-6, reset_day=1, reset_month=1, **kwargs):
-        super(AnnualHydroEnergyRecorder, self).__init__(model, node, **kwargs)
+        super().__init__(model, **kwargs)
+        self.nodes = [n for n in nodes]
 
         self.water_elevation_parameter = water_elevation_parameter
         self.turbine_elevation = turbine_elevation
@@ -613,50 +614,50 @@ cdef class AnnualHydroEnergyRecorder(BaseConstantNodeRecorder):
     cpdef after(self):
 
         cdef double q, head, power
-        flow = self.node.flow
         cdef double energy_temp
         cdef ScenarioIndex scenario_index
         cdef Timestep ts = self.model.timestepper.current
         cdef double days = ts.days
         cdef int i = self._current_year_index
         cdef int j
+        cdef nodes_length = range(0,len(self.nodes),1)
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
-            energy_temp = 0
 
+            for node_index in nodes_length:
 
-            if self._water_elevation_parameter is not None:
-                head = self._water_elevation_parameter.get_value(scenario_index)
-                if self.turbine_elevation is not None:
-                    head -= self.turbine_elevation
-            elif self.turbine_elevation is not None:
-                head = self.turbine_elevation
-            else:
-                raise ValueError('One or both of storage_node or level must be set.')
+                if self._water_elevation_parameter is not None:
+                    head = self._water_elevation_parameter.get_value(scenario_index)
+                    if self.turbine_elevation is not None:
+                        head -= self.turbine_elevation
+                elif self.turbine_elevation is not None:
+                    head = self.turbine_elevation
+                else:
+                    raise ValueError('One or both of storage_node or level must be set.')
 
-            # -ve head is not valid
-            head = max(head, 0.0)
-            # Get the flow from the current node
-            q = self._node._flow[scenario_index.global_id]
-            power = hydropower_calculation(q, head, 0.0, self.efficiency, density=self.density,
-                                             flow_unit_conversion=self.flow_unit_conversion,
-                                             energy_unit_conversion=self.energy_unit_conversion)
+                # -ve head is not valid
+                head = max(head, 0.0)
+                # Get the flow from the current node
+                q = self.nodes[node_index].flow[scenario_index.global_id]
+                power = hydropower_calculation(q, head, 0.0, self.efficiency, density=self.density,
+                                                flow_unit_conversion=self.flow_unit_conversion,
+                                                energy_unit_conversion=self.energy_unit_conversion)
 
-            energy_temp = power * days * 24
+                energy_temp = power * days * 24
 
-            self._annual_energy[i, j] += energy_temp
-            self._data[i, j] = self._annual_energy[i, j]
+                self._annual_energy[i, j] += energy_temp
+        self._data[i, j] = self._annual_energy[i, j]   
         return 0
 
     @classmethod
     def load(cls, model, data):
         from pywr.parameters import load_parameter
-        node = model._get_node_from_ref(model, data.pop("node"))
+        nodes = [model._get_node_from_ref(model, node_name) for node_name in data.pop('nodes')]
         if "water_elevation_parameter" in data:
-            water_elevation_parameter = load_parameter(model, data.pop("water_elevation_parameter"))
+             water_elevation_parameter = load_parameter(model, data.pop("water_elevation_parameter"))
         else:
             water_elevation_parameter = None
 
-        return cls(model, node, water_elevation_parameter=water_elevation_parameter, **data)
+        return cls(model, nodes, water_elevation_parameter, **data)
 AnnualHydroEnergyRecorder.register()

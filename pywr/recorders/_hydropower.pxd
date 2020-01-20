@@ -1,4 +1,4 @@
-from ._recorders cimport NumpyArrayNodeRecorder, BaseConstantNodeRecorder
+from ._recorders cimport NumpyArrayNodeRecorder, BaseConstantNodeRecorder, Recorder
 from pywr.parameters._parameters cimport Parameter
 from .._core cimport Timestep, Scenario, ScenarioIndex
 
@@ -21,7 +21,8 @@ cdef class TotalHydroEnergyRecorder(BaseConstantNodeRecorder):
     cdef public double efficiency
 
 
-cdef class AnnualHydroEnergyRecorder(BaseConstantNodeRecorder):
+cdef class AnnualHydroEnergyRecorder(Recorder):
+    cdef public list nodes
     cdef Parameter _water_elevation_parameter
     cdef public double turbine_elevation
     cdef public double flow_unit_conversion
