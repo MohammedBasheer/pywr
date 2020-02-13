@@ -1,7 +1,7 @@
 import numpy as np
 cimport numpy as np
-from scipy.stats import percentileofscore
 import pandas as pd
+import datetime
 import warnings
 
 
@@ -15,8 +15,6 @@ cdef enum AggFuncs:
     MEDIAN = 4
     PRODUCT = 5
     CUSTOM = 6
-    PERCENTILE = 7
-    PERCENTILEOFSCORE = 8
 _agg_func_lookup = {
     "sum": AggFuncs.SUM,
     "min": AggFuncs.MIN,
@@ -25,8 +23,6 @@ _agg_func_lookup = {
     "median": AggFuncs.MEDIAN,
     "product": AggFuncs.PRODUCT,
     "custom": AggFuncs.CUSTOM,
-    "percentile": AggFuncs.PERCENTILE,
-    "percentileofscore": AggFuncs.PERCENTILEOFSCORE,
 }
 _agg_func_lookup_reverse = {v: k for k, v in _agg_func_lookup.items()}
 
@@ -55,22 +51,14 @@ cdef class Aggregator:
             return _agg_func_lookup_reverse[self._func]
         def __set__(self, func):
             self._user_func = None
-            func_args = []
-            func_kwargs = {}
-            if isinstance(func, str):
-                func_type = _agg_func_lookup[func.lower()]
-            elif isinstance(func, dict):
-                func_type = _agg_func_lookup[func['func']]
-                func_args = func.get('args', [])
-                func_kwargs = func.get('kwargs', {})
+            if isinstance(func, basestring):
+                func = _agg_func_lookup[func.lower()]
             elif callable(func):
                 self._user_func = func
-                func_type = AggFuncs.CUSTOM
+                func = AggFuncs.CUSTOM
             else:
                 raise ValueError("Unrecognised aggregation function: \"{}\".".format(func))
-            self._func = func_type
-            self.func_args = func_args
-            self.func_kwargs = func_kwargs
+            self._func = func
 
     cpdef double aggregate_1d(self, double[:] data, ignore_nan=False) except *:
         """Compute an aggregated value across 1D array.
@@ -94,10 +82,6 @@ cdef class Aggregator:
             return np.median(values)
         elif self._func == AggFuncs.CUSTOM:
             return self._user_func(np.array(values))
-        elif self._func == AggFuncs.PERCENTILE:
-            return np.percentile(values, *self.func_args, **self.func_kwargs)
-        elif self._func == AggFuncs.PERCENTILEOFSCORE:
-            return percentileofscore(values, *self.func_args, **self.func_kwargs)
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -105,7 +89,6 @@ cdef class Aggregator:
         """Compute an aggregated value along an axis of a 2D array.
         """
         cdef double[:, :] values = data
-        cdef Py_ssize_t i
 
         if ignore_nan:
             values = np.array(values)[~np.isnan(values)]
@@ -124,22 +107,6 @@ cdef class Aggregator:
             return np.median(values, axis=axis)
         elif self._func == AggFuncs.CUSTOM:
             return self._user_func(np.array(values), axis=axis)
-        elif self._func == AggFuncs.PERCENTILE:
-            return np.percentile(values, *self.func_args, axis=axis, **self.func_kwargs)
-        elif self._func == AggFuncs.PERCENTILEOFSCORE:
-            # percentileofscore doesn't support the axis argument
-            # we must therefore iterate over the array
-            if axis == 0:
-                out = np.empty(data.shape[1])
-                for i in range(data.shape[1]):
-                    out[i] = percentileofscore(values[:, i], *self.func_args, **self.func_kwargs)
-            elif axis == 1:
-                out = np.empty(data.shape[0])
-                for i in range(data.shape[0]):
-                    out[i] = percentileofscore(values[i, :], *self.func_args, **self.func_kwargs)
-            else:
-                raise ValueError('Axis "{}" not recognised for percentileofscore function.'.format(axis))
-            return out
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -602,7 +569,10 @@ cdef class NumpyArrayNodeSuppliedRatioRecorder(NumpyArrayNodeRecorder):
         cdef Node node = self._node
         for scenario_index in self.model.scenarios.combinations:
             max_flow = node.get_max_flow(scenario_index)
-            self._data[ts.index,scenario_index.global_id] = node._flow[scenario_index.global_id] / max_flow
+            try:
+                self._data[ts.index,scenario_index.global_id] = node._flow[scenario_index.global_id] / max_flow
+            except ZeroDivisionError:
+                self._data[ts.index,scenario_index.global_id] = 1.0
         return 0
 NumpyArrayNodeSuppliedRatioRecorder.register()
 
@@ -644,8 +614,221 @@ cdef class NumpyArrayNodeCurtailmentRatioRecorder(NumpyArrayNodeRecorder):
         cdef Node node = self._node
         for scenario_index in self.model.scenarios.combinations:
             max_flow = node.get_max_flow(scenario_index)
-            self._data[ts.index,scenario_index.global_id] = 1 - node._flow[scenario_index.global_id] / max_flow
+            try:
+                self._data[ts.index,scenario_index.global_id] = 1 - node._flow[scenario_index.global_id] / max_flow
+            except ZeroDivisionError:
+                self._data[ts.index,scenario_index.global_id] = 0.0
 NumpyArrayNodeCurtailmentRatioRecorder.register()
+
+
+cdef class AbstractAnnualRecorder(Recorder):
+    """Abstract class for recording cumulative annual differences between actual flow and max_flow.
+
+    This abstract class can be subclassed to calculate statistics of differences between cumulative
+    annual actual flow and max_flow on multiple nodes. The abstract class records the cumulative
+    actual flow and max_flow from multiple nodes and provides an internal data attribute on which
+    to store a derived statistic. A reset day and month control the day on which the cumulative
+    data is reset to zero.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    nodes : iterable of `pywr.core.Node`
+        Iterable of Node instances to record.
+    reset_month, reset_day : int
+        The month and day in which the cumulative actual and max_flow are reset to zero.
+
+    Notes
+    -----
+    If the first time-step of a simulation does not align with `reset_day` and `reset_month` then
+    the first period of the model will be less than one year in length.
+    """
+    def __init__(self, model, nodes, reset_day=1, reset_month=1, **kwargs):
+        super().__init__(model, **kwargs)
+        self.nodes = [n for n in nodes]
+
+        # Validate the reset day and month
+        # date will raise a ValueError if invalid. We use a non-leap year to ensure
+        # 29th February is an invalid reset day.
+        datetime.date(1999, reset_month, reset_day)
+
+        self.reset_day = reset_day
+        self.reset_month = reset_month
+
+    @classmethod
+    def load(cls, model, data):
+        nodes = [model._get_node_from_ref(model, node_name) for node_name in data.pop('nodes')]
+        return cls(model, nodes, **data)
+
+    cpdef setup(self):
+        cdef int ncomb = len(self.model.scenarios.combinations)
+        cdef int nts = len(self.model.timestepper)
+
+        start = self.model.timestepper.start
+        end_year = self.model.timestepper.end.year
+        nyears = end_year - start.year + 1
+        if start.day != self.reset_day and start.month != self.reset_month:
+            nyears += 1
+
+        self._data = np.zeros((nyears, ncomb,), np.float64)
+        self._max_flow = np.zeros_like(self._data)
+        self._actual_flow = np.zeros_like(self._data)
+        self._current_year_index = 0
+
+    cpdef reset(self):
+        self._data[...] = 0
+        self._max_flow[...] = 0
+        self._actual_flow[...] = 0
+
+        self._current_year_index = -1
+        self._last_reset_year = -1
+
+    cpdef before(self):
+
+        cdef Timestep ts = self.model.timestepper.current
+        if ts.year != self._last_reset_year:
+            # I.e. we're in a new year and ...
+            # ... we're at or past the reset month/day
+            if ts.month > self.reset_month or \
+                    (ts.month == self.reset_month and ts.day >= self.reset_day):
+                self._current_year_index += 1
+                self._last_reset_year = ts.year
+
+            if self._current_year_index < 0:
+                # reset date doesn't align with the start of the model
+                self._current_year_index = 0
+
+    property data:
+        def __get__(self):
+            return np.array(self._data, dtype=np.float64)
+
+    property current_data:
+        def __get__(self):
+            return np.array(self._data[self._current_year_index, :], dtype=np.float64)
+
+    cpdef after(self):
+        cdef double max_flow
+        cdef double actual_flow
+        cdef ScenarioIndex scenario_index
+        cdef Timestep ts = self.model.timestepper.current
+        cdef Node node
+        cdef int i = self._current_year_index
+        cdef int j
+
+        for scenario_index in self.model.scenarios.combinations:
+            j = scenario_index.global_id
+            max_flow = 0
+            actual_flow = 0
+            for node in self.nodes:
+                max_flow += node.get_max_flow(scenario_index)
+                actual_flow += node._flow[scenario_index.global_id]
+
+            self._max_flow[i, j] += max_flow
+            self._actual_flow[i, j] += actual_flow
+        return 0
+
+
+cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
+    """Recorder for the cumulative annual deficit across multiple nodes.
+
+    This recorder calculates the cumulative annual absolute deficit from multiple nodes.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    nodes : iterable of `pywr.core.Node`
+        Iterable of Node instances to record.
+    reset_month, reset_day : int
+        The month and day in which the cumulative actual and max_flow are reset to zero.
+
+    Notes
+    -----
+    If the first time-step of a simulation does not align with `reset_day` and `reset_month` then
+    the first period of the model will be less than one year in length.
+    """
+    cpdef after(self):
+        super(AnnualDeficitRecorder, self).after()
+
+        cdef ScenarioIndex scenario_index
+        cdef int i = self._current_year_index
+        cdef int j
+
+        for scenario_index in self.model.scenarios.combinations:
+            j = scenario_index.global_id
+            self._data[i, j] = self._max_flow[i, j] - self._actual_flow[i, j]
+        return 0
+AnnualDeficitRecorder.register()
+
+
+cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
+    """Recorder for cumulative annual ratio of supplied flow from multiples nodes.
+
+    This recorder calculates the cumulative annual ratio of supplied flow to max_flow
+    from multiple nodes.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    nodes : iterable of `pywr.core.Node`
+        Iterable of Node instances to record.
+    reset_month, reset_day : int
+        The month and day in which the cumulative actual and max_flow are reset to zero.
+
+    Notes
+    -----
+    If the first time-step of a simulation does not align with `reset_day` and `reset_month` then
+    the first period of the model will be less than one year in length.
+    """
+    cpdef after(self):
+        super(AnnualSuppliedRatioRecorder, self).after()
+
+        cdef ScenarioIndex scenario_index
+        cdef int i = self._current_year_index
+        cdef int j
+
+        for scenario_index in self.model.scenarios.combinations:
+            j = scenario_index.global_id
+            try:
+                self._data[i, j] = self._actual_flow[i, j] / self._max_flow[i, j]
+            except ZeroDivisionError:
+                self._data[i, j] = 1.0
+        return 0
+AnnualSuppliedRatioRecorder.register()
+
+
+cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
+    """Recorder for cumulative annual curtailment ratio from multiple nodes.
+
+    This recorder calculates the cumulative annual curtailment ratio from multiple nodes.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    nodes : iterable of `pywr.core.Node`
+        Iterable of Node instances to record.
+    reset_month, reset_day : int
+        The month and day in which the cumulative actual and max_flow are reset to zero.
+
+    Notes
+    -----
+    If the first time-step of a simulation does not align with `reset_day` and `reset_month` then
+    the first period of the model will be less than one year in length.
+    """
+    cpdef after(self):
+        super(AnnualCurtailmentRatioRecorder, self).after()
+
+        cdef ScenarioIndex scenario_index
+        cdef int i = self._current_year_index
+        cdef int j
+
+        for scenario_index in self.model.scenarios.combinations:
+            j = scenario_index.global_id
+            try:
+                self._data[i, j] = 1 - self._actual_flow[i, j] / self._max_flow[i, j]
+            except ZeroDivisionError:
+                self._data[i, j] = 0.0
+        return 0
+AnnualCurtailmentRatioRecorder.register()
 
 
 cdef class FlowDurationCurveRecorder(NumpyArrayNodeRecorder):
