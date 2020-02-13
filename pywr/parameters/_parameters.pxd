@@ -67,14 +67,31 @@ cdef class WeeklyProfileParameter(Parameter):
 
 cdef class MonthlyProfileParameter(Parameter):
     cdef double[:] _values
+    cdef double[:] _interp_values
     cdef double[:] _lower_bounds
     cdef double[:] _upper_bounds
-
+    cdef public object interp_day
+    cpdef _interpolate(self)
 
 cdef class ScenarioMonthlyProfileParameter(Parameter):
     cdef double[:, :] _values
     cdef Scenario _scenario
     cdef int _scenario_index
+
+cdef class ScenarioDailyProfileParameter(Parameter):
+    cdef double[:, :] _values
+    cdef Scenario _scenario
+    cdef int _scenario_index
+
+cdef class ScenarioWeeklyProfileParameter(Parameter):
+    cdef double[:, :] _values
+    cdef Scenario _scenario
+    cdef int _scenario_index
+
+cdef class UniformDrawdownProfileParameter(Parameter):
+    cdef public int reset_day
+    cdef public int reset_month
+    cdef int _reset_idoy
 
 cdef class IndexParameter(Parameter):
     cpdef int index(self, Timestep timestep, ScenarioIndex scenario_index) except? -1
