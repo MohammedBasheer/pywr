@@ -266,7 +266,7 @@ class RbfParameter(Parameter):
             args.append(np.cos(x))
 
         # Perform interpolation.
-        return self._rbf_func(*args)
+        return max(self._rbf_func(*args), 0)
 
     @classmethod
     def load(cls, model, data):
