@@ -262,6 +262,8 @@ cdef class ArrayIndexedScenarioParameter(Parameter):
         # correct number to use in this instance.
         return self.values[ts.index, scenario_index._indices[self._scenario_index]]
 
+ArrayIndexedScenarioParameter.register()
+
 
 cdef class TablesArrayParameter(IndexParameter):
     def __init__(self, model, h5file, node, where='/', scenario=None, **kwargs):
@@ -453,6 +455,10 @@ cdef class ConstantScenarioParameter(Parameter):
         # This setup must find out the index of self._scenario in the model
         # so that it can return the correct value in value()
         self._scenario_index = self.model.scenarios.get_scenario_index(self._scenario)
+
+    cpdef set_double_variables(self, double[:] values):
+        n = len(self._values)
+        self._values[...] = values[0:n]
 
     cpdef double value(self, Timestep ts, ScenarioIndex scenario_index) except? -1:
         # This is a bit confusing.
