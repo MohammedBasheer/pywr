@@ -461,6 +461,13 @@ cdef class ConstantScenarioParameter(Parameter):
         # position of self._scenario in self._scenario_index to lookup the
         # correct number to use in this instance.
         return self._values[scenario_index._indices[self._scenario_index]]
+
+    cpdef set_double_variables(self, double[:] values):
+        n = len(self._values)
+        self._values[...] = values[0:n]
+    cpdef double[:] get_double_variables(self):
+        return np.array(self._values, dtype=np.float64)
+
 ConstantScenarioParameter.register()
 
 
