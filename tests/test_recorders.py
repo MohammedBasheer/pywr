@@ -93,7 +93,7 @@ def test_numpy_recorder_factored(simple_linear_model):
 
     model.run()
 
-    assert rec_fact.data.shape == (365, 1) 
+    assert rec_fact.data.shape == (365, 1)
     assert_allclose(20, rec_fact.data, atol=1e-7)
 
 class TestFlowDurationCurveRecorders:
@@ -1124,6 +1124,33 @@ class TestTablesRecorder:
         assert link['target'] == 'Output'
         np.testing.assert_allclose(link['value'], 40.0)
 
+    def test_generate_dataframes(self, simple_linear_model, tmpdir):
+        """Test TablesRecorder.generate_dataframes """
+        from pywr.parameters import ConstantScenarioParameter
+        model = simple_linear_model
+        scA = Scenario(model, name='A', size=4)
+        scB = Scenario(model, name='B', size=2)
+
+        otpt = model.nodes['Output']
+        inpt = model.nodes['Input']
+
+        inpt.max_flow = ConstantScenarioParameter(model, scA, [10, 20, 30, 40])
+        otpt.max_flow = ConstantScenarioParameter(model, scB, [20, 40])
+        otpt.cost = -2.0
+
+        h5file = tmpdir.join('output.h5')
+        TablesRecorder(model, h5file)
+        model.run()
+
+        dfs = {}
+        for node, df in TablesRecorder.generate_dataframes(h5file):
+            dfs[node] = df
+
+        for node_name in model.nodes.keys():
+            df = dfs[node_name]
+            assert df.shape == (365, 8)
+            np.testing.assert_allclose(df.iloc[0, :], [10, 10, 20, 20, 20, 30, 20, 40])
+
 
 class TestDeficitRecorders:
 
@@ -1405,22 +1432,23 @@ class TestAnnualTotalFlowRecorder:
 
         assert_allclose(3650.0, rec.data, atol=1e-7)
 
-    def test_annual_total_flow_recorder_factored(self, simple_linear_model):    
+    def test_annual_total_flow_recorder_factored(self, simple_linear_model):
         """
         Test AnnualTotalFlowRecorder with factors applied
         """
         model = simple_linear_model
         otpt = model.nodes['Output']
         otpt.max_flow = 30.0
-        model.nodes['Input'].max_flow = 10.0
+        inpt = model.nodes['Input']
+        inpt.max_flow = 10.0
         otpt.cost = -2
 
-        factors = [2.0]
-        rec_fact = AnnualTotalFlowRecorder(model, 'Total Flow', [otpt], factors=factors)
+        factors = [2.0, 1.0]
+        rec_fact = AnnualTotalFlowRecorder(model, 'Total Flow', [otpt, inpt], factors=factors)
 
         model.run()
 
-        assert_allclose(7300.0, rec_fact.data, atol=1e-7)
+        assert_allclose(3650.0*3, rec_fact.data, atol=1e-7)
 
 
 def test_total_flow_node_recorder(simple_linear_model):
