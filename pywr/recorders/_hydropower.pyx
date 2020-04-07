@@ -643,7 +643,7 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
                 self._annual_energy[i, j] += energy_temp
 
-        self._data[i, j] = self._annual_energy[i, j]   
+            self._data[i, j] = self._annual_energy[i, j]   
         
         return 0
 
