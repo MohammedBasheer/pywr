@@ -60,6 +60,7 @@ cdef class AbstractAnnualRecorder(Recorder):
     cdef public int reset_month
     cdef int _current_year_index
     cdef int _last_reset_year
+    cdef Aggregator _temporal_aggregator
 
 cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
     pass
