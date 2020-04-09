@@ -775,6 +775,17 @@ cdef class AbstractAnnualRecorder(Recorder):
         """
         return self._temporal_aggregator.aggregate_2d(self._data, axis=0, ignore_nan=self.ignore_nan)
 
+    def to_dataframe_annual(self):
+        """ Return a `pandas.DataFrame` of the recorder data
+
+        This DataFrame contains a MultiIndex for the columns with the recorder name
+        as the first level and scenario combination names as the second level. This
+        allows for easy combination with multiple recorder's DataFrames
+        """
+        index = np.asarray(range(self.model.timestepper.start.year,self.model.timestepper.end.year+1,1),dtype=np.float64)
+        sc_index = self.model.scenarios.multiindex
+
+        return pd.DataFrame(data=np.array(self._data), index=index, columns=sc_index)
 
 cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
     """Recorder for the cumulative annual deficit across multiple nodes.

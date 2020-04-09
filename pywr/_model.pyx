@@ -707,6 +707,15 @@ class Model(object):
         df.columns.set_names('Recorder', level=0, inplace=True)
         return df
 
+    def to_dataframe_annual(self):
+        """ Return a DataFrame from any Recorders with a `to_dataframe_annual` attribute
+
+        """
+        dfs = {r.name: r.to_dataframe_annual() for r in self.recorders if hasattr(r, 'to_dataframe_annual')}
+        df = pandas.concat(dfs, axis=1)
+        df.columns.set_names('Recorder', level=0, inplace=True)
+        return df
+
     def flatten_component_tree(self, rebuild=False):
         if self.component_tree_flat is None or rebuild is True:
             self.component_tree_flat = []
