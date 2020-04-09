@@ -766,8 +766,8 @@ cdef class AbstractAnnualRecorder(Recorder):
                 max_flow += node.get_max_flow(scenario_index)
                 actual_flow += node._flow[scenario_index.global_id]
 
-            self._max_flow[i, j] += max_flow
-            self._actual_flow[i, j] += actual_flow
+            self._max_flow[i, j] += max_flow * ts.days
+            self._actual_flow[i, j] += actual_flow * ts.days
         return 0
 
     cpdef double[:] values(self):
