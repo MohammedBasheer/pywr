@@ -818,6 +818,37 @@ cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
         return 0
 AnnualDeficitRecorder.register()
 
+cdef class AnnualFlowRecorder(AbstractAnnualRecorder):
+    """Recorder for the cumulative annual deficit across multiple nodes.
+
+    This recorder calculates the cumulative annual absolute flow from multiple nodes.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    nodes : iterable of `pywr.core.Node`
+        Iterable of Node instances to record.
+    reset_month, reset_day : int
+        The month and day in which the cumulative actual and max_flow are reset to zero.
+
+    Notes
+    -----
+    If the first time-step of a simulation does not align with `reset_day` and `reset_month` then
+    the first period of the model will be less than one year in length.
+    """
+    cpdef after(self):
+        super(AnnualFlowRecorder, self).after()
+
+        cdef ScenarioIndex scenario_index
+        cdef int i = self._current_year_index
+        cdef int j
+
+        for scenario_index in self.model.scenarios.combinations:
+            j = scenario_index.global_id
+            self._data[i, j] = self._actual_flow[i, j]
+        return 0
+AnnualFlowRecorder.register()
+
 
 cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
     """Recorder for cumulative annual ratio of supplied flow from multiples nodes.

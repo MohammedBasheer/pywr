@@ -65,6 +65,9 @@ cdef class AbstractAnnualRecorder(Recorder):
 cdef class AnnualDeficitRecorder(AbstractAnnualRecorder):
     pass
 
+cdef class AnnualFlowRecorder(AbstractAnnualRecorder):
+    pass
+
 cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
     pass
 
