@@ -1,4 +1,4 @@
-from ._recorders import NumpyArrayNodeRecorder
+from ._recorders import NumpyArrayNodeRecorder, Aggregator
 import numpy as np
 cimport numpy as np
 import pandas as pd
@@ -539,18 +539,20 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
     the first period of the model will be less than one year in length.
     """
 
-    def __init__(self, model, nodes, water_elevation_parameter=None, turbine_elevation=0.0, efficiency=1.0, density=1000,
+    def __init__(self, model, nodes, water_elevation_parameter=None, turbine_elevation_parameter=None, efficiency=1.0, density=1000,
                  flow_unit_conversion=1.0, energy_unit_conversion=1e-6, reset_day=1, reset_month=1, **kwargs):
+        temporal_agg_func = kwargs.pop('temporal_agg_func', 'mean')
         super().__init__(model, **kwargs)
         self.nodes = [n for n in nodes]
 
         #self.water_elevation_parameter = water_elevation_parameter
         self.water_elevation_parameter = list(water_elevation_parameter)
-        self.turbine_elevation = list(turbine_elevation)
+        self.turbine_elevation_parameter = list(turbine_elevation_parameter)
         self.efficiency = efficiency
         self.density = density
         self.flow_unit_conversion = flow_unit_conversion
         self.energy_unit_conversion = energy_unit_conversion
+        self._temporal_aggregator = Aggregator(temporal_agg_func)
         # Validate the reset day and month
         # date will raise a ValueError if invalid. We use a non-leap year to ensure
         # 29th February is an invalid reset day.
@@ -560,6 +562,9 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         self.reset_month = reset_month
 
         for p in self.water_elevation_parameter:
+            p.parents.add(self)
+
+        for p in self.turbine_elevation_parameter:
             p.parents.add(self)
 
 #    property water_elevation_parameter:
@@ -631,7 +636,7 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
             for node_index in nodes_length:
                 head = self.water_elevation_parameter[node_index].get_value(scenario_index)
-                head -= self.turbine_elevation[node_index]
+                head -= self.turbine_elevation_parameter[node_index].get_value(scenario_index)
                 head = max(head, 0.0)
                 # Get the flow from the current node
                 q = self.nodes[node_index].flow[scenario_index.global_id]
@@ -647,9 +652,25 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         
         return 0
 
+    cpdef double[:] values(self):
+        """Compute a value for each scenario using `temporal_agg_func`.
+        """
+        return self._temporal_aggregator.aggregate_2d(self._data, axis=0, ignore_nan=self.ignore_nan)
+
+    def to_dataframe_annual(self):
+        """ Return a `pandas.DataFrame` of the recorder data
+
+        This DataFrame contains a MultiIndex for the columns with the recorder name
+        as the first level and scenario combination names as the second level. This
+        allows for easy combination with multiple recorder's DataFrames
+        """
+        index = np.asarray(range(self.model.timestepper.start.year,self.model.timestepper.end.year+1,1),dtype=np.float64)
+        sc_index = self.model.scenarios.multiindex
+
+        return pd.DataFrame(data=np.array(self._data), index=index, columns=sc_index)
+
     @classmethod
     def load(cls, model, data):
-        turbine_elevation = data.pop("turbine_elevation")
         from pywr.parameters import load_parameter
         nodes = [model._get_node_from_ref(model, node_name) for node_name in data.pop('nodes')]
         if "water_elevation_parameter" in data:
@@ -657,6 +678,11 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         else:
             water_elevation_parameter = None
 
-        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter,turbine_elevation=turbine_elevation, **data)
+        if "turbine_elevation_parameter" in data:
+            turbine_elevation_parameter = [load_parameter(model, p) for p in data.pop("turbine_elevation_parameter")]
+        else:
+            turbine_elevation_parameter = None    
+
+        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter, turbine_elevation_parameter = turbine_elevation_parameter, **data)
 
 AnnualHydroEnergyRecorder.register()
