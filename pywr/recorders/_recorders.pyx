@@ -17,6 +17,7 @@ cdef enum AggFuncs:
     CUSTOM = 6
     PERCENTILE = 7
     PERCENTILEOFSCORE = 8
+    COUNT_NONZERO = 9
 _agg_func_lookup = {
     "sum": AggFuncs.SUM,
     "min": AggFuncs.MIN,
@@ -27,6 +28,7 @@ _agg_func_lookup = {
     "custom": AggFuncs.CUSTOM,
     "percentile": AggFuncs.PERCENTILE,
     "percentileofscore": AggFuncs.PERCENTILEOFSCORE,
+    "count_nonzero": AggFuncs.COUNT_NONZERO
 }
 _agg_func_lookup_reverse = {v: k for k, v in _agg_func_lookup.items()}
 
@@ -44,7 +46,39 @@ _obj_direction_lookup = {
 }
 
 cdef class Aggregator:
-    """Utility class for computing aggregate values."""
+    """Utility class for computing aggregate values.
+
+    Users are unlikely to use this class directly. Instead `Recorder` sub-classes will use this functionality
+    to aggregate their results across different dimensions (e.g. time, scenarios, etc.).
+
+    Parameters
+    ==========
+    func : str, dict or callable
+        The aggregation function to use. Can be a string or dict defining aggregation functions, or a callable
+        custom function that performs aggregation.
+
+        When a string it can be one of: "sum", "min", "max", "mean", "median", "product", or "count_nonzero". These
+        strings map to and cause the aggregator to use the corresponding `numpy` functions.
+
+        A dict can be provided containing a "func" key, and optional "args" and "kwargs" keys. The value of "func"
+        should be a string corresponding to the aforementioned numpy function names with the additional options of
+        "percentile" and "percentileofscore". These latter two functions require additional arguments (the percentile
+        and score) to function and must be provided as the values in either the "args" or "kwargs" keys of the
+        dictionary. Please refer to the corresponding numpy (or scipy) function definitions for documentation on these
+        arguments.
+
+        Finally, a callable function can be given. This function must accept either a 1D or 2D numpy array as the
+        first argument, and support the "axis" keyword as integer value that determines which axis over which the
+        function should apply aggregation. The axis keyword is only supplied when a 2D array is given. Therefore,`
+        the callable function should behave in a similar fashion to the numpy functions.
+
+    Examples
+    ========
+    >>> Aggregator("sum")
+    >>> Aggregator({"func": "percentile", "args": [95],"kwargs": {}})
+    >>> Aggregator({"func": "percentileofscore", "kwargs": {"score": 0.5, "kind": "rank"}})
+
+    """
     def __init__(self, func):
         self.func = func
 
@@ -98,6 +132,8 @@ cdef class Aggregator:
             return np.percentile(values, *self.func_args, **self.func_kwargs)
         elif self._func == AggFuncs.PERCENTILEOFSCORE:
             return percentileofscore(values, *self.func_args, **self.func_kwargs)
+        elif self._func == AggFuncs.COUNT_NONZERO:
+            return np.count_nonzero(values)
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -140,6 +176,8 @@ cdef class Aggregator:
             else:
                 raise ValueError('Axis "{}" not recognised for percentileofscore function.'.format(axis))
             return out
+        elif self._func == AggFuncs.COUNT_NONZERO:
+            return np.count_nonzero(values, axis=axis).astype(np.float64)
         else:
             raise ValueError('Aggregation function code "{}" not recognised.'.format(self._func))
 
@@ -163,20 +201,32 @@ cdef class Recorder(Component):
         Flag to ignore NaN values when calling `aggregated_value`.
     is_objective : {None, 'maximize', 'maximise', 'max', 'minimize', 'minimise', 'min'}
         Flag to denote the direction, if any, of optimisation undertaken with this recorder.
-    is_constraint : bool (default=False)
-        Flag to denote whether this recorder is to be used as a constraint during optimisation.
     epsilon : float (default=1.0)
         Epsilon distance used by some optimisation algorithms.
+    constraint_lower_bounds, constraint_upper_bounds : double (default=None)
+        The value(s) to use for lower and upper bound definitions. These values determine whether the recorder
+        instance is marked as a constraint. Either bound can be `None` (the default) to disable the respective
+        bound. If both bounds are `None` then the `is_constraint` property will return `False`. The lower bound must
+        be strictly less than the upper bound. An equality constraint can be created by setting both bounds to the
+        same value.
+
+        The constraint bounds are not used during model simulation. Instead they are intended for use by optimisation
+        wrappers (or other external tools) to define constrained optimisation problems.
     """
     def __init__(self, model, agg_func="mean", ignore_nan=False, is_objective=None, epsilon=1.0,
-                 is_constraint=False, name=None, **kwargs):
+                 name=None, constraint_lower_bounds=None, constraint_upper_bounds=None, **kwargs):
+        # Default the constraints internal values to be +/- inf.
+        # This ensures the bounds checking works later in the init.
+        self._constraint_lower_bounds = -np.inf
+        self._constraint_upper_bounds = np.inf
         if name is None:
             name = self.__class__.__name__.lower()
         super(Recorder, self).__init__(model, name=name, **kwargs)
         self.ignore_nan = ignore_nan
         self.is_objective = is_objective
-        self.is_constraint = is_constraint
         self.epsilon = epsilon
+        self.constraint_lower_bounds = constraint_lower_bounds
+        self.constraint_upper_bounds = constraint_upper_bounds
         # Create the aggregator for scenarios
         self._scenario_aggregator = Aggregator(agg_func)
 
@@ -202,6 +252,78 @@ cdef class Recorder(Component):
             else:
                 raise ValueError("Objective direction type not recognised.")
 
+    property constraint_lower_bounds:
+        def __set__(self, value):
+            if value is None:
+                self._constraint_lower_bounds = -np.inf
+            else:
+                if self.constraint_upper_bounds is not None and value > self.constraint_upper_bounds:
+                    raise ValueError('Lower bounds can not be larger than the upper bounds.')
+                self._constraint_lower_bounds = value
+        def __get__(self):
+            if np.isneginf(self._constraint_lower_bounds):
+                return None
+            else:
+                return self._constraint_lower_bounds
+
+    property constraint_upper_bounds:
+        def __set__(self, value):
+            if value is None:
+                self._constraint_upper_bounds = np.inf
+            else:
+                if self.constraint_lower_bounds is not None and value < self.constraint_lower_bounds:
+                    raise ValueError('Upper bounds can not be smaller than the lower bounds.')
+                self._constraint_upper_bounds = value
+        def __get__(self):
+            if np.isinf(self._constraint_upper_bounds):
+                return None
+            else:
+                return self._constraint_upper_bounds
+
+    @property
+    def is_equality_constraint(self):
+        """Returns true if upper and lower constraint bounds are both defined and equal to one another."""
+        return self.constraint_upper_bounds is not None and self.constraint_lower_bounds is not None and \
+               self.constraint_lower_bounds == self.constraint_upper_bounds
+
+    @property
+    def is_double_bounded_constraint(self):
+        """Returns true if upper and lower constraint bounds are both defined and not-equal to one another."""
+        return self.constraint_upper_bounds is not None and self.constraint_lower_bounds is not None and \
+               self.constraint_lower_bounds != self.constraint_upper_bounds
+
+    @property
+    def is_lower_bounded_constraint(self):
+        """Returns true if lower constraint bounds is defined and upper constraint bounds is not."""
+        return self.constraint_upper_bounds is None and self.constraint_lower_bounds is not None
+
+    @property
+    def is_upper_bounded_constraint(self):
+        """Returns true if upper constraint bounds is defined and lower constraint bounds is not."""
+        return self.constraint_upper_bounds is not None and self.constraint_lower_bounds is None
+
+    @property
+    def is_constraint(self):
+        """Returns true if either upper or lower constraint bounds is defined."""
+        return self.constraint_upper_bounds is not None or self.constraint_lower_bounds is not None
+
+    def is_constraint_violated(self):
+        """Returns true if the value from this Recorder violates its constraint bounds.
+
+        If no constraint bounds are defined (i.e. self.is_constraint == False) then a ValueError is raised.
+        """
+        value = self.aggregated_value()
+        if self.is_equality_constraint:
+            feasible = value == self.constraint_lower_bounds
+        elif self.is_double_bounded_constraint:
+            feasible = self.constraint_lower_bounds <= value <= self.constraint_upper_bounds
+        elif self.is_lower_bounded_constraint:
+            feasible = self.constraint_lower_bounds <= value
+        elif self.is_upper_bounded_constraint:
+            feasible = value <= self.constraint_upper_bounds
+        else:
+            raise ValueError(f'Recorder "{self.name}" has no constraint bounds defined.')
+        return not feasible
 
     def __repr__(self):
         return '<{} "{}">'.format(self.__class__.__name__, self.name)
