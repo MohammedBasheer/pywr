@@ -57,7 +57,7 @@ class PlatypusWrapper(BaseOptimisationWrapper):
     def _make_constraints(self, constraints):
         """ Setup the constraints. """
         # Setup the constraints
-        self.problem.constraints[:] = "<=45547"
+        self.problem.constraints[:] = "<=1380.2"
 
     def evaluate(self, solution):
         logger.info('Evaluating solution ...')
