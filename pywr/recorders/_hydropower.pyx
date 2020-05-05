@@ -845,9 +845,6 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
 
             self._data[i, j] = (self._annual_hydro_energy[i, j]+self._annual_non_hydro_energy[i, j])/self._annual_energy_demand[i, j]
 
-            print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            print((self._annual_hydro_energy[i, j]+self._annual_non_hydro_energy[i, j])/self._annual_energy_demand[i, j])
-            import pdb; pdb.set_trace()
         return 0
 
     cpdef double[:] values(self):
