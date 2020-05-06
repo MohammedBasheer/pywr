@@ -36,9 +36,10 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
     cdef int _current_year_index
     cdef int _last_reset_year
     cdef Aggregator _temporal_aggregator
+    cdef double[:, :] switch
 
 
-cdef class AnnualEnergySupplyRatioRecorder(Recorder):
+cdef class AnnualNonHydroEnergyRecorder(Recorder):
     cdef public list nodes
     cdef public list water_elevation_parameter
     cdef public list turbine_elevation_parameter
@@ -57,7 +58,8 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
     cdef int _current_year_index
     cdef int _last_reset_year
     cdef Aggregator _temporal_aggregator
-
+    cdef double[:, :] switch
+    
 
 cdef class HydropowerRecorderWithVaribaleTailwater(NumpyArrayNodeRecorder):
     cdef Parameter _water_elevation_parameter

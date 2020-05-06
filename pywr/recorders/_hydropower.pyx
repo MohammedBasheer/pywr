@@ -589,10 +589,12 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
         self._data = np.zeros((nyears, ncomb,), np.float64)
         self._annual_energy = np.zeros_like(self._data)
         self._current_year_index = 0
+        self.switch = np.zeros_like(self._data)
 
     cpdef reset(self):
         self._data[...] = 0
         self._annual_energy[...] = 0
+        self.switch[...] = 0
 
         self._current_year_index = -1
         self._last_reset_year = -1
@@ -633,6 +635,9 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
+            if self.switch[i, j] == 1:
+                self._annual_energy[i, j] = 0
+                self.switch[i, j] = 0
 
             for node_index in nodes_length:
                 head = self.water_elevation_parameter[node_index].get_value(scenario_index)
@@ -647,6 +652,9 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
                 energy_temp = power * days * 24
 
                 self._annual_energy[i, j] += energy_temp
+
+            if ts.month == 12 and ts.day == 31:
+                self.switch[i, j] = 1
 
             self._data[i, j] = self._annual_energy[i, j]   
         
@@ -688,7 +696,7 @@ cdef class AnnualHydroEnergyRecorder(Recorder):
 AnnualHydroEnergyRecorder.register()
 
 
-cdef class AnnualEnergySupplyRatioRecorder(Recorder):
+cdef class AnnualNonHydroEnergyRecorder(Recorder):
     """Abstract class for recording cumulative annual differences between actual flow and max_flow.
 
     This abstract class can be subclassed to calculate statistics of differences between cumulative
@@ -774,12 +782,14 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
         self._annual_non_hydro_energy = np.zeros_like(self._data)
         self._annual_energy_demand = np.zeros_like(self._data)
         self._current_year_index = 0
+        self.switch = np.zeros_like(self._data)
 
     cpdef reset(self):
         self._data[...] = 0
         self._annual_hydro_energy[...] = 0
         self._annual_non_hydro_energy[...] = 0
         self._annual_energy_demand[...] = 0
+        self.switch[...] = 0
 
         self._current_year_index = -1
         self._last_reset_year = -1
@@ -820,6 +830,11 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
+            if self.switch[i, j] == 1:
+                self._annual_hydro_energy[i, j] = 0
+                self._annual_energy_demand[i, j] = 0
+                self._annual_non_hydro_energy[i, j] = 0
+                self.switch[i, j] = 0
 
             non_hydro_capacity = self.non_hydro_capacity_parameter_MW.get_value(scenario_index)
             energy_demand = self.energy_demand_parameter_MWh_per_day.get_value(scenario_index)
@@ -843,7 +858,10 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
             self._annual_non_hydro_energy[i, j] += energy_non_hydro
             self._annual_energy_demand[i, j] += energy_demand * days
 
-            self._data[i, j] = (self._annual_hydro_energy[i, j]+self._annual_non_hydro_energy[i, j])/self._annual_energy_demand[i, j]
+            if ts.month == 12 and ts.day == 31:
+                self.switch[i, j] = 1
+                
+            self._data[i, j] = self._annual_non_hydro_energy[i, j]
 
         return 0
 
@@ -890,4 +908,4 @@ cdef class AnnualEnergySupplyRatioRecorder(Recorder):
 
         return cls(model, nodes, water_elevation_parameter = water_elevation_parameter, turbine_elevation_parameter = turbine_elevation_parameter,non_hydro_capacity_parameter_MW = non_hydro_capacity_parameter_MW, energy_demand_parameter_MWh_per_day = energy_demand_parameter_MWh_per_day, **data)
 
-AnnualEnergySupplyRatioRecorder.register()
+AnnualNonHydroEnergyRecorder.register()

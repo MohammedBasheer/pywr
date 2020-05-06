@@ -717,11 +717,13 @@ cdef class AbstractAnnualRecorder(Recorder):
         self._max_flow = np.zeros_like(self._data)
         self._actual_flow = np.zeros_like(self._data)
         self._current_year_index = 0
+        self.switch = np.zeros_like(self._data)
 
     cpdef reset(self):
         self._data[...] = 0
         self._max_flow[...] = 0
         self._actual_flow[...] = 0
+        self.switch[...] = 0
 
         self._current_year_index = -1
         self._last_reset_year = -1
@@ -760,6 +762,12 @@ cdef class AbstractAnnualRecorder(Recorder):
 
         for scenario_index in self.model.scenarios.combinations:
             j = scenario_index.global_id
+
+            if self.switch[i, j] == 1:
+                self._max_flow[i, j] = 0
+                self._actual_flow[i, j] = 0
+                self.switch[i, j] = 0
+
             max_flow = 0
             actual_flow = 0
             for node in self.nodes:
@@ -768,6 +776,10 @@ cdef class AbstractAnnualRecorder(Recorder):
 
             self._max_flow[i, j] += max_flow * ts.days
             self._actual_flow[i, j] += actual_flow * ts.days
+
+            if ts.month == 12 and ts.day == 31:
+                self.switch[i, j] = 1
+
         return 0
 
     cpdef double[:] values(self):
