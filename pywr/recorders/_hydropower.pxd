@@ -49,6 +49,7 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
     cdef public double energy_unit_conversion
     cdef public double density
     cdef public double efficiency
+    cdef public double system_losses
     cdef public int reset_day
     cdef public int reset_month
     cdef double[:, :] _data

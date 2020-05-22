@@ -719,8 +719,11 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
     the first period of the model will be less than one year in length.
     """
 
-    def __init__(self, model, nodes, water_elevation_parameter=None, turbine_elevation_parameter=None, non_hydro_capacity_parameter_MW=None, energy_demand_parameter_MWh_per_day=None, efficiency=1.0, density=1000,
-                 flow_unit_conversion=1.0, energy_unit_conversion=1e-6, reset_day=1, reset_month=1, **kwargs):
+    def __init__(self, model, nodes, water_elevation_parameter=None,
+                turbine_elevation_parameter=None, non_hydro_capacity_parameter_MW=None,
+                system_losses=1.0, energy_demand_parameter_MWh_per_day=None, efficiency=1.0,
+                density=1000, flow_unit_conversion=1.0, energy_unit_conversion=1e-6,
+                reset_day=1, reset_month=1, **kwargs):
         temporal_agg_func = kwargs.pop('temporal_agg_func', 'mean')
         super().__init__(model, **kwargs)
         self.nodes = [n for n in nodes]
@@ -730,6 +733,7 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
         self.non_hydro_capacity_parameter_MW = non_hydro_capacity_parameter_MW
         self.energy_demand_parameter_MWh_per_day = energy_demand_parameter_MWh_per_day
         self.efficiency = efficiency
+        self.system_losses = system_losses
         self.density = density
         self.flow_unit_conversion = flow_unit_conversion
         self.energy_unit_conversion = energy_unit_conversion
@@ -854,7 +858,7 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
                 total_hydro += energy_hydro
                 self._annual_hydro_energy[i, j] += energy_hydro
 
-            energy_non_hydro = min(max(energy_demand * days - total_hydro,0),non_hydro_capacity* days * 24)
+            energy_non_hydro = min(max(energy_demand * days - total_hydro,0),non_hydro_capacity * min((1-self.system_losses),0) * days * 24)
             self._annual_non_hydro_energy[i, j] += energy_non_hydro
             self._annual_energy_demand[i, j] += energy_demand * days
 
@@ -906,6 +910,9 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
         else:
             energy_demand_parameter_MWh_per_day = None
 
-        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter, turbine_elevation_parameter = turbine_elevation_parameter,non_hydro_capacity_parameter_MW = non_hydro_capacity_parameter_MW, energy_demand_parameter_MWh_per_day = energy_demand_parameter_MWh_per_day, **data)
+        return cls(model, nodes, water_elevation_parameter = water_elevation_parameter,
+        turbine_elevation_parameter = turbine_elevation_parameter,
+        non_hydro_capacity_parameter_MW = non_hydro_capacity_parameter_MW,
+        energy_demand_parameter_MWh_per_day = energy_demand_parameter_MWh_per_day, **data)
 
 AnnualNonHydroEnergyRecorder.register()
