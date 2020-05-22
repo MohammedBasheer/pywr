@@ -858,7 +858,7 @@ cdef class AnnualNonHydroEnergyRecorder(Recorder):
                 total_hydro += energy_hydro
                 self._annual_hydro_energy[i, j] += energy_hydro
 
-            energy_non_hydro = min(max(energy_demand * days - total_hydro,0),non_hydro_capacity * min((1-self.system_losses),0) * days * 24)
+            energy_non_hydro = min(max(energy_demand * days - total_hydro,0),non_hydro_capacity * max((1-self.system_losses),0) * days * 24)
             self._annual_non_hydro_energy[i, j] += energy_non_hydro
             self._annual_energy_demand[i, j] += energy_demand * days
 
