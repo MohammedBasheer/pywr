@@ -354,7 +354,7 @@ cdef class ControlCurveInterpolatedParameter_iteration(BaseControlCurveParameter
     >>> storage_node.cost = cost
     """
     def __init__(self, model, storage_node, control_curves, values=None, parameters=None, **kwargs):
-        super(ControlCurveInterpolatedParameter, self).__init__(model, storage_node, control_curves, **kwargs)
+        super(ControlCurveInterpolatedParameter_iteration, self).__init__(model, storage_node, control_curves, **kwargs)
         # Expected number of values is number of control curves plus two.
         nvalues = len(self.control_curves) + 2
         self.parameters = None
@@ -389,7 +389,7 @@ cdef class ControlCurveInterpolatedParameter_iteration(BaseControlCurveParameter
         cdef double cc, cc_prev
         cdef Storage node = self._storage_node
         # return the interpolated value for the current level.
-        cdef double current_pc = node._current_pc[scenario_index.global_id]
+        cdef double current_pc = node.volume[scenario_index.global_id]/node.get_max_volume(scenario_index)
         cdef double weight
         cdef double[:] values  # y values to interpolate between in this time-step
 
@@ -439,8 +439,8 @@ cdef class ControlCurveInterpolatedParameter_iteration(BaseControlCurveParameter
 
     @classmethod
     def load(cls, model, data):
-        control_curves = super(ControlCurveInterpolatedParameter, cls)._load_control_curves(model, data)
-        storage_node = super(ControlCurveInterpolatedParameter, cls)._load_storage_node(model, data)
+        control_curves = super(ControlCurveInterpolatedParameter_iteration, cls)._load_control_curves(model, data)
+        storage_node = super(ControlCurveInterpolatedParameter_iteration, cls)._load_storage_node(model, data)
         if "parameters" in data:
             parameters = [load_parameter(model, p) for p in data.pop("parameters")]
             values = None
