@@ -22,6 +22,11 @@ cdef class ControlCurveInterpolatedParameter(BaseControlCurveParameter):
     cdef public list parameters
 
 
+cdef class ControlCurveInterpolatedParameter_iteration(BaseControlCurveParameter):
+    cdef double[:] _values
+    cdef public list parameters
+
+
 cdef class ControlCurvePiecewiseInterpolatedParameter(BaseControlCurveParameter):
     cdef double[:, :] _values
     cdef public list parameters

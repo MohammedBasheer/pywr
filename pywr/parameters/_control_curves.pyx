@@ -310,6 +310,147 @@ cdef class ControlCurveInterpolatedParameter(BaseControlCurveParameter):
 ControlCurveInterpolatedParameter.register()
 
 
+cdef class ControlCurveInterpolatedParameter_iteration(BaseControlCurveParameter):
+    """A control curve Parameter that interpolates between three or more values
+
+    Return values are linearly interpolated between control curves, with the
+    first and last value being 100% and 0% respectively.
+
+    Parameters
+    ----------
+    storage_node : `Storage`
+        The storage node to compare the control curve(s) to.
+    control_curves : list of `Parameter` or floats
+        A list of parameters representing the control curve(s). These are
+        often MonthlyProfileParameters or DailyProfileParameters, but may be
+        any Parameter that returns values between 0.0 and 1.0. If floats are
+        passed they are converted to `ConstantParameter`.
+    values : list of float
+        A list of values to return corresponding to the control curves. The
+        length of the list should be 2 + len(control_curves).
+    parameters : iterable `Parameter` objects or `None`, optional
+        If `values` is `None` then `parameters` can specify a `Parameter` object to use at each
+        of the control curves. The number of parameters should be 2 + len(control_curves)
+
+    Examples
+    --------
+    In the example below the cost of a storage node is related to it's volume.
+    At 100% full the cost is 0. Between 100% and 50% the cost is linearly
+    interpolated between 0 and -5. Between 50% and 30% the cost is interpolated
+    between -5 and -10. Between 30% and 0% the cost is interpolated between -10
+    and -20
+
+    ::
+
+        Volume:  100%             50%      30%       0%
+                  |----------------|--------|--------|
+          Cost:  0.0            -5.0     -10.0   -20.0
+
+
+    >>> storage_node = Storage(model, "reservoir", max_volume=100, initial_volume=100)
+    >>> ccs = [ConstantParameter(0.5), ConstantParameter(0.3)]
+    >>> values = [0.0, -5.0, -10.0, -20.0]
+    >>> cost = ControlCurveInterpolatedParameter(storage_node, ccs, values)
+    >>> storage_node.cost = cost
+    """
+    def __init__(self, model, storage_node, control_curves, values=None, parameters=None, **kwargs):
+        super(ControlCurveInterpolatedParameter, self).__init__(model, storage_node, control_curves, **kwargs)
+        # Expected number of values is number of control curves plus two.
+        nvalues = len(self.control_curves) + 2
+        self.parameters = None
+
+        if values is not None:
+            if len(values) != nvalues:
+                raise ValueError('Length of values should be two more than the number of '
+                                 'control curves ({}).'.format(nvalues))
+            self.values = np.asarray(values)
+
+        elif parameters is not None:
+            if len(parameters) != nvalues:
+                raise ValueError('Length of parameters should be two more than the number of '
+                                 'control curves ({}).'.format(nvalues))
+            self.parameters = list(parameters)
+            # Make sure these parameters depend on this parameter to ensure they are evaluated
+            # in the correct order.
+            for p in self.parameters:
+                p.parents.add(self)
+        else:
+            raise ValueError('One of values or parameters keywords must be given.')
+
+    property values:
+        def __get__(self):
+            return np.array(self._values)
+        def __set__(self, values):
+            self._values = np.array(values)
+
+    cpdef double value(self, Timestep ts, ScenarioIndex scenario_index) except? -1:
+        cdef int j
+        cdef Parameter cc_param, value_param
+        cdef double cc, cc_prev
+        cdef Storage node = self._storage_node
+        # return the interpolated value for the current level.
+        cdef double current_pc = node._current_pc[scenario_index.global_id]
+        cdef double weight
+        cdef double[:] values  # y values to interpolate between in this time-step
+
+        if self.parameters is not None:
+            # If there are parameter use them to gather the interpolation values
+            values = np.empty(len(self.parameters))
+            for j, value_param in enumerate(self.parameters):
+                values[j] = value_param.get_value(scenario_index)
+        else:
+            # Otherwise use the given array of floats.
+            # This makes a reference rather than a copy.
+            values = self._values
+
+        # Bounds check the current pc storage.
+        # Always return the first value if storage above 100% or NaN
+        if current_pc > 1.0 or npy_isnan(current_pc):
+            return values[0]
+        # Always return last value is storage less than 0%
+        if current_pc < 0.0:
+            return values[-1]
+
+        # Assumes control_curves is sorted highest to lowest
+        # First level 100%
+        cc_prev = 1.0
+        for j, cc_param in enumerate(self._control_curves):
+            cc = cc_param.get_value(scenario_index)
+            # If level above control curve then return this level's value
+            if current_pc >= cc:
+                try:
+                    weight = (current_pc - cc) / (cc_prev - cc)
+                except ZeroDivisionError:
+                    # Last two control curves identical; return the next value
+                    return values[j+1]
+                return values[j]*weight + values[j+1]*(1.0 - weight)
+            # Update previous value for next iteration
+            cc_prev = cc
+
+        # Current storage is above none of the control curves
+        # Therefore interpolate between last control curve and bottom
+        cc = 0.0
+        try:
+            weight = (current_pc - cc) / (cc_prev - cc)
+        except ZeroDivisionError:
+            # cc_prev == cc  i.e. last control curve is close to 0%
+            return values[-2]
+        return values[-2]*weight + values[-1]*(1.0 - weight)
+
+    @classmethod
+    def load(cls, model, data):
+        control_curves = super(ControlCurveInterpolatedParameter, cls)._load_control_curves(model, data)
+        storage_node = super(ControlCurveInterpolatedParameter, cls)._load_storage_node(model, data)
+        if "parameters" in data:
+            parameters = [load_parameter(model, p) for p in data.pop("parameters")]
+            values = None
+        else:
+            values = load_parameter_values(model, data)
+            parameters = None
+        return cls(model, storage_node, control_curves, values=values, parameters=parameters)
+
+ControlCurveInterpolatedParameter_iteration.register()
+
 cdef class ControlCurvePiecewiseInterpolatedParameter(BaseControlCurveParameter):
     """A control curve Parameter that interpolates between two or more pairs of values.
 
