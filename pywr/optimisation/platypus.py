@@ -6,6 +6,22 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def count_constraints(constraints):
+    """Count the number of constraints.
+
+     Recorders that are doubled bounded will create two constraints in the platypus problem.
+     """
+    count = 0
+    for c in constraints:
+        if c.is_double_bounded_constraint:
+            count += 2
+        elif c.is_constraint:
+            count += 1
+        else:
+            raise ValueError(f'Constraint "{c.name}" has no bounds defined.')
+    return count
+
+
 class PlatypusWrapper(BaseOptimisationWrapper):
     """ A helper class for running pywr optimisations with platypus.
     """
@@ -26,7 +42,7 @@ class PlatypusWrapper(BaseOptimisationWrapper):
         if len(objectives) < 1:
             raise ValueError('At least one objective must be defined.')
 
-        self.problem = platypus.Problem(variable_map[-1], len(objectives), len(constraints))
+        self.problem = platypus.Problem(variable_map[-1], len(objectives), count_constraints(constraints))
         self.problem.function = self.evaluate
         self.problem.wrapper = self
 
@@ -81,7 +97,14 @@ class PlatypusWrapper(BaseOptimisationWrapper):
             value = r.aggregated_value()
             objectives.append(sign*value)
 
-        constraints = [r.aggregated_value() for r in self.model_constraints]
+        constraints = []
+        for c in self.model_constraints:
+            x = c.aggregated_value()
+            if c.is_double_bounded_constraint:
+                # Double bounded recorder is translated to two platypus constraints.
+                constraints.extend([x, x])
+            else:
+                constraints.append(x)
 
         # Return values to the solution
         logger.info('Evaluation complete!')
