@@ -45,13 +45,20 @@ cdef class AbstractThresholdParameter(IndexParameter):
     the previous day. In this case the predicate evaluates to True.
 
     """
-    def __init__(self, model, threshold, *args, values=None, predicate=None, ratchet=False, **kwargs):
+    def __init__(self, model, threshold, *args, values=None, parameters=None, predicate=None, ratchet=False, **kwargs):
         super(AbstractThresholdParameter, self).__init__(model, *args, **kwargs)
         self.threshold = threshold
-        if values is None:
-            self.values = None
-        else:
+        self.parameters = None
+
+        if values is not None:
             self.values = np.array(values, np.float64)
+        elif parameters is not None:
+            self.parameters = list(parameters)
+            for p in self.parameters:
+                p.parents.add(self)
+        else:
+            self.values = None
+
         if predicate is None:
             predicate = Predicates.LT
         elif isinstance(predicate, str):
@@ -74,7 +81,18 @@ cdef class AbstractThresholdParameter(IndexParameter):
     cpdef double value(self, Timestep timestep, ScenarioIndex scenario_index) except? -1:
         """Returns a value from the values attribute, using the index"""
         cdef int ind = self.get_index(scenario_index)
+        cdef int j
+        cdef Parameter param
         cdef double v
+        cdef double[:] values
+
+        if self.parameters is not None:
+            # If there are parameter use them to gather the values
+            values = np.empty(len(self.parameters))
+            for j, param in enumerate(self.parameters):
+                values[j] = param.get_value(scenario_index)
+            self.values = np.array(values, np.float64)
+            
         if self.values is not None:
             v = self.values[ind]
         else:
@@ -264,9 +282,14 @@ cdef class CurrentYearThresholdParameter(AbstractThresholdParameter):
     @classmethod
     def load(cls, model, data):
         threshold = load_parameter(model, data.pop("threshold"))
-        values = data.pop("values", None)
+        if "parameters" in data:
+            parameters = [load_parameter(model, p) for p in data.pop("parameters")]
+            values = None
+        else:
+            values = data.pop("values", None)
+            parameters = None
         predicate = data.pop("predicate", None)
-        return cls(model, threshold, values=values, predicate=predicate, **data)
+        return cls(model, threshold, values=values, parameters=parameters, predicate=predicate, **data)
 CurrentYearThresholdParameter.register()
 
 

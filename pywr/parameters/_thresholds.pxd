@@ -9,6 +9,7 @@ cdef class AbstractThresholdParameter(IndexParameter):
     cdef public double _threshold
     cdef public Parameter _threshold_parameter
     cdef double[:] values
+    cdef public list parameters
     cdef int predicate
     cdef public bint ratchet
     cdef uint8[:] _triggered
