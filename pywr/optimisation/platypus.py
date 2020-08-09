@@ -72,8 +72,25 @@ class PlatypusWrapper(BaseOptimisationWrapper):
 
     def _make_constraints(self, constraints):
         """ Setup the constraints. """
-        # Setup the constraints
-        self.problem.constraints[:] = "<=1380.2"
+
+        ic = 0  # platypus constraint index
+        for c in constraints:
+            if c.is_double_bounded_constraint:
+                # Need to create two constraints
+                self.problem.constraints[ic] = platypus.Constraint('>=', value=c.constraint_lower_bounds)
+                self.problem.constraints[ic + 1] = platypus.Constraint('<=', value=c.constraint_upper_bounds)
+                ic += 2
+            elif c.is_equality_constraint:
+                self.problem.constraints[ic] = platypus.Constraint('==', value=c.constraint_lower_bounds)
+                ic += 1
+            elif c.is_lower_bounded_constraint:
+                self.problem.constraints[ic] = platypus.Constraint('>=', value=c.constraint_lower_bounds)
+                ic += 1
+            elif c.is_upper_bounded_constraint:
+                self.problem.constraints[ic] = platypus.Constraint('<=', value=c.constraint_upper_bounds)
+                ic += 1
+            else:
+                raise RuntimeError(f'The bounds of constraint "{c.name}" could not be identified correctly.')
 
     def evaluate(self, solution):
         logger.info('Evaluating solution ...')

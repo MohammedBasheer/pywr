@@ -1817,8 +1817,6 @@ class TestUniformDrawdownProfileParameter:
             return expected_values[timestep.index]
 
         m.run()
-<<<<<<< HEAD
-=======
 
 
 class TestRbfProfileParameter:
@@ -1957,4 +1955,3 @@ class TestDiscountFactorParameter:
             return 1/pow(1.035, year - 2015)
 
         model.run()
->>>>>>> master
