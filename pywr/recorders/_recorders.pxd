@@ -18,8 +18,8 @@ cdef class Recorder(Component):
     cdef public double epsilon
     cdef public bint ignore_nan
     cdef public Aggregator _scenario_aggregator
-    cpdef double aggregated_value(self) except? -1
-    cpdef double[:] values(self)
+    cpdef double aggregated_value(self) except *
+    cpdef double[:] values(self) except *
 
 cdef class AggregatedRecorder(Recorder):
     cdef object recorder_agg_func
@@ -90,6 +90,10 @@ cdef class NumpyArrayAreaRecorder(NumpyArrayAbstractStorageRecorder):
     pass
 
 cdef class NumpyArrayParameterRecorder(ParameterRecorder):
+    cdef public Aggregator _temporal_aggregator
+    cdef double[:, :] _data
+
+cdef class NumpyArrayDailyProfileParameterRecorder(ParameterRecorder):
     cdef public Aggregator _temporal_aggregator
     cdef double[:, :] _data
 
