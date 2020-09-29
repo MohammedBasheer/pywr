@@ -292,6 +292,11 @@ class Model(object):
             data = data.read()
             return cls.loads(data, model, path, solver)
 
+        return cls._load_from_dict(data, model=model, path=path, solver=None, **kwargs)
+
+    @classmethod
+    def _load_from_dict(cls, data, model=None, path=None, solver=None, **kwargs):
+        """Load data from a dictionary."""
         # data is a dictionary, make a copy to avoid modify the input
         data = copy.deepcopy(data)
 
@@ -396,13 +401,13 @@ class Model(object):
                 except KeyError:
                     break
 
-                #If unable to load a node, then reraise the exception with some
-                #useful information like node name and parameter name.
+                # If unable to load a node, then reraise the exception with some
+                # useful information like node name and parameter name.
                 try:
-                      component = load_component(model, component_data, name)
+                    component = load_component(model, component_data, name)
                 except Exception as err:
                     logger.critical("Error loading component %s", name)
-                    #Reraise the exception
+                    # Reraise the exception
                     raise
 
                 yield component
@@ -647,17 +652,17 @@ class Model(object):
             try:
                 node.setup(self)
             except Exception as err:
-              #reraise the exception after logging some info about source of error
-              logger.critical("An error occurred setting up node during setup %s",
-                              node.name)
-              raise
+                # reraise the exception after logging some info about source of error
+                logger.critical("An error occurred setting up node during setup %s",
+                                node.name)
+                raise
 
         components = self.flatten_component_tree(rebuild=True)
         for component in components:
             try:
                 component.setup()
             except Exception as err:
-                #reraise the exception after logging some info about source of error
+                # reraise the exception after logging some info about source of error
                 logger.critical("An error occurred setting up component during setup %s",
                                 component.name)
                 raise
@@ -676,14 +681,14 @@ class Model(object):
                 try:
                     node.setup(self)
                 except Exception as err:
-                    #reraise the exception after logging some info about source of error
-                    logger.critical("An error occurred calling setup while resetting node %s",node.name)
+                    # reraise the exception after logging some info about source of error
+                    logger.critical("An error occurred calling setup while resetting node %s", node.name)
                     raise
             try:
                 node.reset()
             except Exception as err:
-                #reraise the exception after logging some info about source of error
-                logger.critical("An error occurred calling reset on node %s",node.name)
+                # reraise the exception after logging some info about source of error
+                logger.critical("An error occurred calling reset on node %s", node.name)
                 raise
 
         components = self.flatten_component_tree(rebuild=False)
@@ -692,7 +697,7 @@ class Model(object):
                 try:
                     component.setup()
                 except Exception as err:
-                    #reraise the exception after logging some info about source of error
+                    # reraise the exception after logging some info about source of error
                     logger.critical("An error occurred calling setup while resetting component %s",
                                     component.name)
                     raise
@@ -700,7 +705,7 @@ class Model(object):
             try:
                 component.reset()
             except Exception as err:
-                #reraise the exception after logging some info about source of error
+                # reraise the exception after logging some info about source of error
                 logger.critical("An error occurred calling reset on component %s",
                                 component.name)
                 raise
@@ -755,7 +760,7 @@ class Model(object):
             try:
                 component.finish()
             except Exception as err:
-                #reraise the exception after logging some info about source of error
+                # reraise the exception after logging some info about source of error
                 logger.critical("An error occurred finishing component %s", component.name)
                 raise
 
@@ -959,8 +964,8 @@ class NamedIterator(object):
 
 
 class ModelResult(object):
-    def __init__(self, num_scenarios, timestep, time_taken, time_taken_before, time_taken_after, time_taken_with_overhead,
-                 speed, solver_name, solver_stats, version):
+    def __init__(self, num_scenarios, timestep, time_taken, time_taken_before, time_taken_after,
+                 time_taken_with_overhead, speed, solver_name, solver_stats, version):
         self.timestep = timestep
         self.timesteps = timestep.index + 1
         self.time_taken = time_taken

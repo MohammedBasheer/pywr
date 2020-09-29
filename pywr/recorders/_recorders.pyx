@@ -1055,6 +1055,37 @@ cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
 AnnualCurtailmentRatioRecorder.register()
 
 
+cdef class NumpyArrayNodeCostRecorder(NumpyArrayNodeRecorder):
+    """Recorder for timeseries of cost from a `Node`.
+
+    This class stores the unit cost from a specific node for each time-step of a simulation. The data is
+    saved internally using a memory view. The data can be accessed through the `data` attribute or
+    `to_dataframe()` method.
+
+    Parameters
+    ----------
+    model : `pywr.core.Model`
+    node : `pywr.core.Node`
+        Node instance to record.
+    temporal_agg_func : str or callable (default="mean")
+        Aggregation function used over time when computing a value per scenario. This can be used
+        to return, for example, the median flow over a simulation. For aggregation over scenarios
+        see the `agg_func` keyword argument.
+
+    See also
+    --------
+    NumpyArrayNodeRecorder
+    """
+    cpdef after(self):
+        cdef double max_flow
+        cdef ScenarioIndex scenario_index
+        cdef Timestep ts = self.model.timestepper.current
+        cdef Node node = self._node
+        for scenario_index in self.model.scenarios.combinations:
+            self._data[ts.index, scenario_index.global_id] = node.get_cost(scenario_index)
+NumpyArrayNodeCostRecorder.register()
+
+
 cdef class FlowDurationCurveRecorder(NumpyArrayNodeRecorder):
     """
     This recorder calculates a flow duration curve for each scenario.
@@ -1792,10 +1823,10 @@ cdef class RollingMeanFlowNodeRecorder(NodeRecorder):
         else:
             self.days = 0
         self._data = None
+        self.position = 0
 
     cpdef setup(self):
         super(RollingMeanFlowNodeRecorder, self).setup()
-        self.position = 0
         self._data = np.empty([len(self.model.timestepper), len(self.model.scenarios.combinations)])
         if self.days > 0:
             try:
@@ -1805,6 +1836,10 @@ cdef class RollingMeanFlowNodeRecorder(NodeRecorder):
         if self.timesteps == 0:
             raise ValueError("Timesteps property of MeanFlowRecorder is less than 1.")
         self._memory = np.zeros([len(self.model.scenarios.combinations), self.timesteps])
+
+    cpdef reset(self):
+        super(RollingMeanFlowNodeRecorder, self).reset()
+        self.position = 0
 
     cpdef after(self):
         cdef Timestep timestep

@@ -75,6 +75,9 @@ cdef class AnnualSuppliedRatioRecorder(AbstractAnnualRecorder):
 
 cdef class AnnualCurtailmentRatioRecorder(AbstractAnnualRecorder):
     pass
+    
+cdef class NumpyArrayNodeCostRecorder(NumpyArrayNodeRecorder):
+    pass
 
 cdef class NumpyArrayAbstractStorageRecorder(StorageRecorder):
     cdef public Aggregator _temporal_aggregator
